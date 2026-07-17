@@ -636,10 +636,10 @@
               type="button"
               class="week-today"
               disabled={isViewingToday}
-              aria-label="Jump to today"
+              aria-label="Jump to now"
               onclick={goToToday}
             >
-              Today
+              Now
             </button>
           {/if}
         </div>
@@ -926,7 +926,7 @@
     border: none;
     border-radius: 6px;
     background: transparent;
-    color: var(--app-accent);
+    color: color-mix(in srgb, var(--text-color) 60%, transparent);
     font: inherit;
     font-size: 12px;
     font-weight: 600;
@@ -935,7 +935,7 @@
   }
 
   .week-today:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--app-accent) 12%, transparent);
+    background: color-mix(in srgb, var(--text-color) 8%, transparent);
   }
 
   .week-today:disabled {
@@ -953,15 +953,12 @@
     display: flex;
     flex-direction: column;
     margin: 0 8px 8px;
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--text-color) 4%, transparent);
     overflow: hidden;
   }
 
   .stream-pins {
     flex-shrink: 0;
     z-index: 3;
-    background: color-mix(in srgb, var(--app-background) 94%, var(--text-color));
     border-bottom: 1px solid color-mix(in srgb, var(--text-color) 8%, transparent);
   }
 
@@ -1137,14 +1134,6 @@
     .life-year-row:hover .year-gutter,
     .week-label:hover {
       opacity: 0.7;
-    }
-
-    .week-stream {
-      background: color-mix(in srgb, #fff 4%, transparent);
-    }
-
-    .stream-pins {
-      background: color-mix(in srgb, var(--app-background) 94%, #fff);
     }
 
     .week-sticky {
