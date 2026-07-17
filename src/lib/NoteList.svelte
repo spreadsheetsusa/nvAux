@@ -107,7 +107,7 @@
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <ul
   id="noteList"
-  class="thin-scrollbar"
+  class="thin-scrollbar flex-shrink-0 border-box"
   onmousedown={() => (isMouseDown = true)}
   onmouseup={() => (isMouseDown = false)}
   style="height: {$noteListHeight}px;"
@@ -143,7 +143,7 @@
         </span>
       </span>
 
-      <span class="meta flex items-center" style={selectedGuid === note.guid && 'background: #2252a0; color: white;'}>
+      <span class="meta flex items-center truncate" style={selectedGuid === note.guid && 'background: #2252a0; color: white;'}>
         {formatDate(note.updatedAt)}
         <button
           type="button"
@@ -177,8 +177,6 @@
     overflow-x: hidden;
     background-color: var(--app-omni-background);
     border-radius: 8px;
-    box-sizing: border-box;
-    flex-shrink: 0;
   }
   li {
     display: flex;
@@ -200,7 +198,6 @@
   }
   .meta {
     color: #43484f;
-    white-space: nowrap;
     text-align: right;
     font-size: 13px;
   }

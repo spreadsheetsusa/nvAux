@@ -11,7 +11,7 @@
 </script>
 
 <aside
-  class="sidebar flex-grow-0 relative"
+  class="sidebar flex-grow-0 flex-shrink-0 relative h-full"
   class:open={$sidebarOpen}
   aria-hidden={!$sidebarOpen}
   style="width: {$sidebarOpen ? $sidebarWidth : 0}px; overflow: {$sidebarOpen ? 'visible' : 'hidden'};"
@@ -36,8 +36,6 @@
 
 <style>
   .sidebar {
-    flex-shrink: 0;
-    height: 100%;
     z-index: 0;
     background-color: var(--app-statusbar-background);
     border-right: 1px solid transparent;

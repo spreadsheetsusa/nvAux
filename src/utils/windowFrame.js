@@ -1,0 +1,452 @@
+const MOVE_THRESHOLD = 2;
+const EDGE_MARGIN = 48;
+const MIN_WIDTH = 360;
+const MIN_HEIGHT = 300;
+const CORNERS = ['nw', 'ne', 'sw', 'se'];
+
+/**
+ * App Windowed floating-window move + corner resize.
+ * Uses fixed left/top anchoring (not flex-centered transform) so opposite
+ * corners stay put like a desktop window / Photoshop.
+ *
+ * @param {HTMLElement} node
+ * @param {{ enabled?: boolean, moveEnabled?: boolean, resizeEnabled?: boolean, threshold?: number }} params
+ */
+export function windowFrame(node, params = {}) {
+  let enabled = !!(params.enabled ?? (params.moveEnabled || params.resizeEnabled));
+  let threshold = params.threshold ?? MOVE_THRESHOLD;
+
+  /** @type {number | null} */
+  let left = null;
+  /** @type {number | null} */
+  let top = null;
+  /** @type {number | null} */
+  let width = null;
+  /** @type {number | null} */
+  let height = null;
+  let pinned = false;
+
+  let pendingMove = false;
+  let moving = false;
+  let resizing = false;
+  /** @type {string | null} */
+  let resizeCorner = null;
+  /** @type {number | null} */
+  let pointerId = null;
+
+  let startClientX = 0;
+  let startClientY = 0;
+  let startLeft = 0;
+  let startTop = 0;
+  let startWidth = 0;
+  let startHeight = 0;
+  let suppressClick = false;
+
+  /** @type {HTMLDivElement[]} */
+  const cornerEls = CORNERS.map((corner) => {
+    const el = document.createElement('div');
+    el.className = `window-corner window-corner-${corner}`;
+    el.dataset.corner = corner;
+    el.setAttribute('aria-hidden', 'true');
+    node.appendChild(el);
+    return el;
+  });
+
+  function syncCorners() {
+    for (const el of cornerEls) {
+      el.style.display = enabled ? '' : 'none';
+    }
+  }
+
+  function applyFrame() {
+    if (!pinned || left == null || top == null || width == null || height == null) return;
+    node.style.position = 'fixed';
+    node.style.left = `${Math.round(left)}px`;
+    node.style.top = `${Math.round(top)}px`;
+    node.style.width = `${Math.round(width)}px`;
+    node.style.height = `${Math.round(height)}px`;
+    node.style.maxWidth = 'none';
+    node.style.margin = '0';
+    node.style.transform = 'none';
+  }
+
+  function clearFrameStyles() {
+    node.style.removeProperty('position');
+    node.style.removeProperty('left');
+    node.style.removeProperty('top');
+    node.style.removeProperty('width');
+    node.style.removeProperty('height');
+    node.style.removeProperty('max-width');
+    node.style.removeProperty('margin');
+    node.style.removeProperty('transform');
+    node.style.removeProperty('will-change');
+    node.style.removeProperty('transition');
+  }
+
+  function resetFrame() {
+    pinned = false;
+    left = null;
+    top = null;
+    width = null;
+    height = null;
+    clearFrameStyles();
+  }
+
+  /** Default Demo-sized floating card, centered (matches `main.windowed` CSS). */
+  function computeDefaultWindowedRect() {
+    const sidebarOpen = node.classList.contains('sidebar-open');
+    const sidebarWidth =
+      parseFloat(getComputedStyle(node).getPropertyValue('--sidebar-width')) || 443;
+    const pad = 16; // shell `p-2` breathing room
+    const maxW = sidebarOpen ? 690 + sidebarWidth : 690;
+    const availW = Math.max(MIN_WIDTH, window.innerWidth - pad);
+    const availH = Math.max(MIN_HEIGHT, window.innerHeight - pad);
+    const targetW = Math.round(Math.min(maxW, availW));
+    const targetH = Math.round(Math.max(MIN_HEIGHT, Math.min(availH * 0.5, availH)));
+    return {
+      left: Math.round((window.innerWidth - targetW) / 2),
+      top: Math.round((window.innerHeight - targetH) / 2),
+      width: targetW,
+      height: targetH,
+    };
+  }
+
+  function setFrame(next, { transition = true } = {}) {
+    left = next.left;
+    top = next.top;
+    width = next.width;
+    height = next.height;
+    pinned = true;
+    if (!transition) node.style.transition = 'none';
+    else node.style.removeProperty('transition');
+    applyFrame();
+  }
+
+  /** Pin current on-screen box (no tween) — used mid-drag when not yet pinned. */
+  function pinFromLayout() {
+    const rect = node.getBoundingClientRect();
+    setFrame(
+      {
+        left: rect.left,
+        top: rect.top,
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      },
+      { transition: false }
+    );
+    requestAnimationFrame(() => {
+      if (!moving && !resizing) node.style.removeProperty('transition');
+    });
+  }
+
+  /**
+   * Enter App Windowed: tween from the current box (usually fullscreen)
+   * down to the default Demo-sized card so resize affordance is obvious.
+   */
+  function enterWindowedAnimated() {
+    const from = node.getBoundingClientRect();
+    const to = computeDefaultWindowedRect();
+
+    setFrame(
+      {
+        left: from.left,
+        top: from.top,
+        width: Math.round(from.width),
+        height: Math.round(from.height),
+      },
+      { transition: false }
+    );
+
+    // Double rAF: paint the fullscreen pin, then tween to Demo size.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!enabled) return;
+        setFrame(to, { transition: true });
+      });
+    });
+  }
+
+  function clearInteractionChrome() {
+    document.body.classList.remove('is-panel-resizing');
+    document.body.style.cursor = '';
+    node.style.removeProperty('will-change');
+    node.style.removeProperty('transition');
+  }
+
+  function armInteraction(cursor) {
+    node.style.transition = 'none';
+    node.style.willChange = 'left, top, width, height';
+    document.body.classList.add('is-panel-resizing');
+    document.body.style.cursor = cursor;
+  }
+
+  function ensurePinned() {
+    if (!pinned) pinFromLayout();
+  }
+
+  function clamp(n, lo, hi) {
+    return Math.min(hi, Math.max(lo, n));
+  }
+
+  function isExcluded(target) {
+    if (!(target instanceof Element)) return true;
+    if (target.closest('.resize-handle')) return true;
+    if (target.closest('.omnibar button')) return true;
+    if (target.closest('.window-corner')) return true;
+    return false;
+  }
+
+  function isMoveEligible(target) {
+    if (!(target instanceof Element)) return false;
+    if (isExcluded(target)) return false;
+    if (target.closest('.life-calendar')) return true;
+    if (target.closest('#omni-input')) return true;
+    if (target.closest('.omnibar .input-wrapper')) return true;
+    if (target.closest('.omnibar') && !target.closest('button')) return true;
+    return false;
+  }
+
+  function cornerFromTarget(target) {
+    if (!(target instanceof Element)) return null;
+    const el = target.closest('.window-corner');
+    return el?.dataset?.corner ?? null;
+  }
+
+  function cursorForCorner(corner) {
+    return corner === 'nw' || corner === 'se' ? 'nwse-resize' : 'nesw-resize';
+  }
+
+  function endInteraction(event) {
+    if (pointerId != null && node.hasPointerCapture?.(pointerId)) {
+      try {
+        node.releasePointerCapture(pointerId);
+      } catch {
+        /* already released */
+      }
+    }
+    if (moving || resizing) {
+      suppressClick = true;
+      clearInteractionChrome();
+    }
+    pendingMove = false;
+    moving = false;
+    resizing = false;
+    resizeCorner = null;
+    pointerId = null;
+    event?.preventDefault?.();
+  }
+
+  function onCornerPointerDown(event) {
+    if (!enabled) return;
+    if (event.button != null && event.button !== 0) return;
+    const corner = cornerFromTarget(event.target);
+    if (!corner) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    ensurePinned();
+
+    resizing = true;
+    resizeCorner = corner;
+    pointerId = event.pointerId;
+    startClientX = event.clientX;
+    startClientY = event.clientY;
+    startLeft = left;
+    startTop = top;
+    startWidth = width;
+    startHeight = height;
+
+    try {
+      node.setPointerCapture(event.pointerId);
+    } catch {
+      /* ignore */
+    }
+    armInteraction(cursorForCorner(corner));
+  }
+
+  function onPointerDown(event) {
+    if (cornerFromTarget(event.target)) {
+      onCornerPointerDown(event);
+      return;
+    }
+    if (!enabled) return;
+    if (event.button != null && event.button !== 0) return;
+    if (!isMoveEligible(event.target)) return;
+
+    pendingMove = true;
+    moving = false;
+    pointerId = event.pointerId;
+    startClientX = event.clientX;
+    startClientY = event.clientY;
+  }
+
+  function applyResize(dx, dy) {
+    let nextLeft = startLeft;
+    let nextTop = startTop;
+    let nextW = startWidth;
+    let nextH = startHeight;
+    const corner = resizeCorner;
+
+    if (corner === 'se') {
+      nextW = startWidth + dx;
+      nextH = startHeight + dy;
+    } else if (corner === 'sw') {
+      nextW = startWidth - dx;
+      nextH = startHeight + dy;
+      nextLeft = startLeft + dx;
+    } else if (corner === 'ne') {
+      nextW = startWidth + dx;
+      nextH = startHeight - dy;
+      nextTop = startTop + dy;
+    } else if (corner === 'nw') {
+      nextW = startWidth - dx;
+      nextH = startHeight - dy;
+      nextLeft = startLeft + dx;
+      nextTop = startTop + dy;
+    }
+
+    const maxW = Math.max(MIN_WIDTH, window.innerWidth - EDGE_MARGIN);
+    const maxH = Math.max(MIN_HEIGHT, window.innerHeight - EDGE_MARGIN);
+    nextW = Math.round(clamp(nextW, MIN_WIDTH, maxW));
+    nextH = Math.round(clamp(nextH, MIN_HEIGHT, maxH));
+
+    // Keep the opposite corner anchored after size clamping (Photoshop-style).
+    if (corner === 'sw' || corner === 'nw') {
+      nextLeft = startLeft + (startWidth - nextW);
+    }
+    if (corner === 'ne' || corner === 'nw') {
+      nextTop = startTop + (startHeight - nextH);
+    }
+
+    // Keep a useful portion on-screen.
+    nextLeft = clamp(nextLeft, EDGE_MARGIN - nextW, window.innerWidth - EDGE_MARGIN);
+    nextTop = clamp(nextTop, EDGE_MARGIN - nextH, window.innerHeight - EDGE_MARGIN);
+
+    left = nextLeft;
+    top = nextTop;
+    width = nextW;
+    height = nextH;
+    applyFrame();
+  }
+
+  function applyMove(dx, dy) {
+    const nextLeft = clamp(
+      startLeft + dx,
+      EDGE_MARGIN - width,
+      window.innerWidth - EDGE_MARGIN
+    );
+    const nextTop = clamp(
+      startTop + dy,
+      EDGE_MARGIN - height,
+      window.innerHeight - EDGE_MARGIN
+    );
+    left = nextLeft;
+    top = nextTop;
+    applyFrame();
+  }
+
+  function onPointerMove(event) {
+    if (pointerId != null && event.pointerId !== pointerId) return;
+
+    if (resizing) {
+      event.preventDefault();
+      applyResize(event.clientX - startClientX, event.clientY - startClientY);
+      return;
+    }
+
+    if (!enabled || (!pendingMove && !moving)) return;
+
+    const dx = event.clientX - startClientX;
+    const dy = event.clientY - startClientY;
+
+    if (!moving) {
+      if (dx * dx + dy * dy < threshold * threshold) return;
+      ensurePinned();
+      moving = true;
+      pendingMove = false;
+      startLeft = left;
+      startTop = top;
+      try {
+        node.setPointerCapture(event.pointerId);
+      } catch {
+        /* ignore */
+      }
+      armInteraction('move');
+    }
+
+    event.preventDefault();
+    applyMove(dx, dy);
+  }
+
+  function onPointerUp(event) {
+    if (!pendingMove && !moving && !resizing) return;
+    if (pointerId != null && event.pointerId !== pointerId) return;
+    endInteraction(event);
+  }
+
+  function onClickCapture(event) {
+    if (!suppressClick) return;
+    suppressClick = false;
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  function onLostCapture() {
+    if (!pendingMove && !moving && !resizing) return;
+    pendingMove = false;
+    moving = false;
+    resizing = false;
+    resizeCorner = null;
+    pointerId = null;
+    clearInteractionChrome();
+  }
+
+  syncCorners();
+  if (enabled) {
+    // Fresh load already in Windowed: land on Demo-sized card (no fullscreen to leave).
+    setFrame(computeDefaultWindowedRect(), { transition: false });
+    requestAnimationFrame(() => node.style.removeProperty('transition'));
+  }
+
+  node.addEventListener('pointerdown', onPointerDown);
+  node.addEventListener('pointermove', onPointerMove);
+  node.addEventListener('pointerup', onPointerUp);
+  node.addEventListener('pointercancel', onPointerUp);
+  node.addEventListener('lostpointercapture', onLostCapture);
+  node.addEventListener('click', onClickCapture, true);
+
+  return {
+    update(newParams = {}) {
+      const nextEnabled = !!(
+        newParams.enabled ?? (newParams.moveEnabled || newParams.resizeEnabled)
+      );
+      threshold = newParams.threshold ?? MOVE_THRESHOLD;
+
+      if (enabled && !nextEnabled) {
+        endInteraction();
+        clearInteractionChrome();
+        resetFrame();
+      } else if (!enabled && nextEnabled) {
+        enabled = true;
+        syncCorners();
+        enterWindowedAnimated();
+        return;
+      }
+
+      enabled = nextEnabled;
+      syncCorners();
+    },
+    destroy() {
+      endInteraction();
+      clearInteractionChrome();
+      resetFrame();
+      node.removeEventListener('pointerdown', onPointerDown);
+      node.removeEventListener('pointermove', onPointerMove);
+      node.removeEventListener('pointerup', onPointerUp);
+      node.removeEventListener('pointercancel', onPointerUp);
+      node.removeEventListener('lostpointercapture', onLostCapture);
+      node.removeEventListener('click', onClickCapture, true);
+      for (const el of cornerEls) el.remove();
+    },
+  };
+}

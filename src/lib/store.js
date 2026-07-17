@@ -11,16 +11,53 @@ import { schema } from './schema';
 
 const storedNoteListHeight = localStorage.getItem('noteListHeight') || 220;
 const storedSidebarWidth = localStorage.getItem('sidebarWidth') || 443;
-const storedFullScreen = JSON.parse(localStorage.getItem('fullScreen')) || false;
-const storedMaximumFullScreen = JSON.parse(localStorage.getItem('maximumFullScreen')) || true;
+
+/** @param {string} key @param {boolean} fallback */
+function readStoredBool(key, fallback) {
+  const raw = localStorage.getItem(key);
+  if (raw === null) return fallback;
+  try {
+    return !!JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+
+const storedFullScreen = readStoredBool('fullScreen', false);
+/** Windowed app mode; migrated from inverted legacy `maximumFullScreen`. */
+const storedWindowed = (() => {
+  const raw = localStorage.getItem('windowed');
+  if (raw !== null) return readStoredBool('windowed', false);
+  const legacy = localStorage.getItem('maximumFullScreen');
+  if (legacy !== null) {
+    try {
+      return !JSON.parse(legacy);
+    } catch {
+      return false;
+    }
+  }
+  return false;
+})();
 const storedShowClock = JSON.parse(localStorage.getItem('showClock')) || "true";
-const storedSidebarOpen = JSON.parse(localStorage.getItem('sidebarOpen')) || false;
+const storedSidebarOpen = readStoredBool('sidebarOpen', false);
 const storedBirthDate = localStorage.getItem('birthDate') || '1982-05-24';
 const storedExpectedLongevity = localStorage.getItem('expectedLongevity') || '80';
-const LIFE_CALENDAR_STATS = ['percentLived', 'yearsLived', 'percentRemaining', 'yearsRemaining'];
+const LIFE_CALENDAR_STATS = [
+  'title',
+  'yearsOld',
+  'percentLived',
+  'yearsLived',
+  'percentRemaining',
+  'yearsRemaining',
+];
+const LIFE_CALENDAR_STAT_PREF_VERSION = '2';
+if (localStorage.getItem('lifeCalendarStatPrefVersion') !== LIFE_CALENDAR_STAT_PREF_VERSION) {
+  localStorage.setItem('lifeCalendarStat', 'title');
+  localStorage.setItem('lifeCalendarStatPrefVersion', LIFE_CALENDAR_STAT_PREF_VERSION);
+}
 const storedLifeCalendarStat = LIFE_CALENDAR_STATS.includes(localStorage.getItem('lifeCalendarStat'))
   ? localStorage.getItem('lifeCalendarStat')
-  : 'percentLived';
+  : 'title';
 
 /**
  * RxDB ************************************************************************
@@ -116,13 +153,16 @@ export const selectedNote = writable({});
 export const bodyText = writable('');
 export const markdownPreview = writable(false);
 export const fullScreen = writable(storedFullScreen);
-export const maximumFullScreen = writable(storedMaximumFullScreen);
+/** App Mode floating window (vs edge-to-edge fullscreen). */
+export const windowed = writable(storedWindowed);
 export const showClock = writable(storedShowClock);
 export const sidebarOpen = writable(storedSidebarOpen);
 export const birthDate = writable(storedBirthDate);
 export const expectedLongevity = writable(storedExpectedLongevity);
 export const lifeCalendarStat = writable(storedLifeCalendarStat);
 export const LIFE_CALENDAR_STAT_MODES = LIFE_CALENDAR_STATS;
+/** Height of the media player bar above the StatusBar (0 when hidden). */
+export const mediaPlayerHeight = writable(0);
 
 /**
  * Open a note by guid in NoteDetail and select it in the list.
@@ -151,10 +191,10 @@ omniText.subscribe(v => {
 noteListHeight.subscribe(v => localStorage.setItem('noteListHeight', v.toString()));
 sidebarWidth.subscribe(v => localStorage.setItem('sidebarWidth', v.toString()));
 
-fullScreen.subscribe(v => localStorage.setItem('fullScreen', v));
-maximumFullScreen.subscribe(v => localStorage.setItem('maximumFullScreen', v));
+fullScreen.subscribe(v => localStorage.setItem('fullScreen', JSON.stringify(v)));
+windowed.subscribe(v => localStorage.setItem('windowed', JSON.stringify(v)));
 showClock.subscribe(v => localStorage.setItem('showClock', v));
-sidebarOpen.subscribe(v => localStorage.setItem('sidebarOpen', v));
+sidebarOpen.subscribe(v => localStorage.setItem('sidebarOpen', JSON.stringify(v)));
 birthDate.subscribe(v => localStorage.setItem('birthDate', v));
 expectedLongevity.subscribe(v => localStorage.setItem('expectedLongevity', v));
 lifeCalendarStat.subscribe(v => localStorage.setItem('lifeCalendarStat', v));

@@ -1,5 +1,5 @@
 <script>
-  import { fullScreen, selectedNote, markdownPreview } from './store';
+  import { fullScreen, windowed, selectedNote, markdownPreview } from './store';
   import { isEmptyObject } from '../utils/isEmptyObject';
 
   const SETTINGS_GUID = '00000000-0000-0000-0000-000000000000';
@@ -23,13 +23,13 @@
 
 <div
   class="status-bar px-2 items-center flex absolute w-full flex-grow-0 transition-all"
-  style="font-size: 12px;  background: var(--app-statusbar-background); bottom: 0; left: 0; color: #606060; border-top: 1px solid var(--app-statusbar-border); height: {$fullScreen ? '45px' : '34px'};"
+  style="font-size: 12px;  background: var(--app-statusbar-background); bottom: 0; left: 0; color: #606060; border-top: 1px solid var(--app-statusbar-border); height: {$fullScreen && !$windowed ? '45px' : '34px'};"
 >
   <div class="flex-grow flex items-center">nvAux v0.1.7-20260716-001</div>
   {#if canPreview}
     <button
       type="button"
-      class="preview-toggle"
+      class="preview-toggle flex-shrink-0"
       class:active={$markdownPreview}
       onclick={togglePreview}
     >
@@ -40,7 +40,6 @@
 
 <style>
   .preview-toggle {
-    flex-shrink: 0;
     margin-left: 8px;
     padding: 2px 8px;
     border: 1px solid transparent;

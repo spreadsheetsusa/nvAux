@@ -22,7 +22,7 @@
   import yaml from 'highlight.js/lib/languages/yaml';
   import 'highlight.js/styles/github-dark.css';
 
-  import { selectedNote, bodyText, markdownPreview } from './store';
+  import { selectedNote, bodyText, markdownPreview, mediaPlayerHeight } from './store';
 
   import { debounce } from '../utils/debounce';
   import { isEmptyObject } from '../utils/isEmptyObject';
@@ -87,26 +87,26 @@
 <div
   bind:clientWidth={innerWidth}
   bind:clientHeight={innerHeight}
-  class="note-detail relative"
-  style="background: var(--app-notedetail-background);"
+  class="note-detail relative flex flex-col flex-1 min-h-0 overflow-hidden border-box"
+  style="background: var(--app-notedetail-background); margin-bottom: {35 + $mediaPlayerHeight}px;"
 >
   {#if isEmptyObject($selectedNote)}
-    <div class="empty-state">
+    <div class="empty-state flex-1 min-h-0 w-full flex items-center justify-center">
       <h2 style="font-size: 18px; color: #525962">No Note Selected</h2>
     </div>
   {:else if $selectedNote.guid === SETTINGS_GUID}
-    <div class="settings-scroll thin-scrollbar">
+    <div class="settings-scroll thin-scrollbar flex-1 min-h-0 overflow-y-auto">
       <Settings />
     </div>
   {:else if showPreview}
-    <div class="markdown-preview thin-scrollbar">
+    <div class="markdown-preview thin-scrollbar flex-1 min-h-0 overflow-y-auto">
       {@html previewHtml}
     </div>
   {:else}
-    <div class="editor-shell">
+    <div class="editor-shell relative flex-1 min-h-0 overflow-hidden">
       <textarea
         id="body-editor"
-        class="body-editor thin-scrollbar block no-resize border-0 outline-none border-box bg-transparent"
+        class="body-editor thin-scrollbar absolute inset-0 w-full h-full overflow-y-auto block no-resize border-0 outline-none border-box bg-transparent"
         bind:value={$bodyText}
         onkeyup={handleDebounceSave}
       ></textarea>
@@ -116,44 +116,15 @@
 
 <style>
   .note-detail {
-    display: flex;
-    flex-direction: column;
-    flex: 1 1 0%;
-    min-height: 0;
-    margin: 0 6px 35px 6px;
+    margin-top: 0;
+    margin-left: 6px;
+    margin-right: 6px;
     border-radius: 8px;
-    overflow: hidden;
-    box-sizing: border-box;
-  }
-
-  .empty-state {
-    flex: 1 1 0%;
-    min-height: 0;
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .settings-scroll {
-    flex: 1 1 0%;
-    min-height: 0;
-    overflow-y: auto;
-  }
-
-  .editor-shell {
-    position: relative;
-    flex: 1 1 0%;
-    min-height: 0;
-    overflow: hidden;
+    /* Safety: never collapse away when the note list was left tall */
+    min-height: 120px;
   }
 
   .body-editor {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    overflow-y: auto;
     field-sizing: fixed;
     padding: 4px 13px;
     color: rgba(255, 255, 255, 0.831);
@@ -164,9 +135,6 @@
   }
 
   .markdown-preview {
-    flex: 1 1 0%;
-    min-height: 0;
-    overflow-y: auto;
     padding: 4px 13px;
     color: rgba(255, 255, 255, 0.831);
     font-size: 14px;

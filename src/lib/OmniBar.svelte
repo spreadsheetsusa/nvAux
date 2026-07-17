@@ -6,10 +6,21 @@
   import IconXcircle from './IconXcircle.svelte';
   import IconSidebar from './IconSidebar.svelte';
 
-  import { omniMode, omniText, selectedNote, db, bodyText, sidebarOpen, fullScreen, showClock } from './store';
+  import { omniMode, omniText, selectedNote, db, bodyText, sidebarOpen, fullScreen, windowed, showClock } from './store';
 
   let omniInput = $state();
   let time = $state(new Date());
+  let isAppFullscreen = $derived($fullScreen && !$windowed);
+
+  /** Omnibar: Demo ↔ App Fullscreen. Windowed is Settings-only. */
+  function toggleAppFullscreen() {
+    if (!$fullScreen || $windowed) {
+      $fullScreen = true;
+      $windowed = false;
+    } else {
+      $fullScreen = false;
+    }
+  }
 
   onMount(() => {
     omniInput.focus();
@@ -119,11 +130,11 @@
       type="button"
       aria-label="Toggle fullscreen"
       class="bg-transparent flex items-center outline-none transition-all"
-      style="color: {!$fullScreen ? 'var(--app-accent)' : '#818181'}"
-      onclick={() => ($fullScreen = !$fullScreen)}
+      style="color: {!isAppFullscreen ? 'var(--app-accent)' : '#818181'}"
+      onclick={toggleAppFullscreen}
     >
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-minimize">
-        {#if $fullScreen}
+        {#if isAppFullscreen}
           <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"></path>
         {:else}
           <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>

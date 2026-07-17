@@ -1,5 +1,5 @@
 <script>
-  import { db, maximumFullScreen, showClock, fullScreen, birthDate, expectedLongevity } from './store';
+  import { db, windowed, showClock, fullScreen, birthDate, expectedLongevity } from './store';
 
   import DownloadNotesZip from './DownloadNotesZip.svelte';
   import ImportNotesZip from './ImportNotesZip.svelte';
@@ -32,10 +32,10 @@
         <label for="showClock"><input id="showClock" type="checkbox" bind:checked={$showClock} /> Show Clock</label>
       </div>
       <div style="margin-top: 15px;">
-        <label for="fullScreen"><input id="fullScreen" type="checkbox" bind:checked={$fullScreen} /> Fullscreen App Mode</label>
+        <label for="fullScreen"><input id="fullScreen" type="checkbox" bind:checked={$fullScreen} /> App Mode</label>
       </div>
       <div style="margin-top: 3px; margin-left: 15px; opacity: {$fullScreen ? 1 : 0.5}">
-        <label for="maxfullscreen"><input id="maxfullscreen" type="checkbox" disabled={!$fullScreen} bind:checked={$maximumFullScreen} /> Full Bleed</label>
+        <label for="windowed"><input id="windowed" type="checkbox" disabled={!$fullScreen} bind:checked={$windowed} /> Windowed</label>
       </div>
     </div>
 

@@ -58,7 +58,7 @@
 </script>
 
 <div
-  class="resize-handle select-none"
+  class="resize-handle select-none flex-shrink-0"
   class:vertical={orientation === 'vertical'}
   class:horizontal={orientation === 'horizontal'}
   class:active={dragging}
@@ -80,7 +80,6 @@
 
 <style>
   .resize-handle {
-    flex-shrink: 0;
     touch-action: none;
     z-index: 2;
   }

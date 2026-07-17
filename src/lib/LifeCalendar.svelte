@@ -9,7 +9,6 @@
     lifeCalendarStat,
     LIFE_CALENDAR_STAT_MODES,
     selectNoteByGuid,
-    selectedNote,
     sidebarWidth,
   } from './store';
 
@@ -171,11 +170,13 @@
   let yearsRemainingPrecise = $derived(Math.max(0, yearsCount - yearsLivedPrecise));
   let titleStat = $derived(
     {
+      title: 'Life Calendar',
+      yearsOld: `${yearsLived} Years Old`,
       percentLived: `${percentLived.toFixed(2)}% of life lived`,
       yearsLived: `${yearsLivedPrecise.toFixed(2)} years of life lived`,
       percentRemaining: `${percentRemaining.toFixed(2)}% of life remaining`,
       yearsRemaining: `${yearsRemainingPrecise.toFixed(2)} years of life remaining`,
-    }[$lifeCalendarStat] ?? `${percentLived.toFixed(2)}% lived`,
+    }[$lifeCalendarStat] ?? 'Life Calendar',
   );
 
   let weekNumbers = $derived(Array.from({ length: maxWeeks }, (_, i) => i));
@@ -216,7 +217,6 @@
   let selectedWeekMeta = $derived(
     selected ? lifetimeWeeks.find((w) => w.index === selected.index) : null,
   );
-  let selectedNoteGuid = $derived($selectedNote?.guid);
   let weekRangeLabel = $derived(selectedWeekMeta?.rangeLabel ?? '');
   let stickyYearLabel = $derived(
     selected != null ? `Age ${selected.age}` : '',
@@ -546,7 +546,7 @@
 </script>
 
 <div
-  class="life-calendar h-full flex flex-col overflow-hidden"
+  class="life-calendar relative h-full flex flex-col overflow-hidden"
   class:vt-scope={vtDocumentScope}
   {@attach (el) => {
     scopeEl = el;
@@ -558,14 +558,14 @@
   {#if !inWeekView}
     <button
       type="button"
-      class="life-calendar-title"
+      class="life-calendar-title flex-shrink-0 w-full"
       title="Click to change stat"
       onclick={cycleTitleStat}
     >
       {titleStat}
     </button>
     <div
-      class="life-calendar-scroll thin-scrollbar overflow-y-auto px-2 pb-5"
+      class="life-calendar-scroll thin-scrollbar flex-1 min-h-0 overflow-y-auto px-2 pb-5"
       role="region"
       aria-label="Life calendar: week {weeksIntoYear + 1} of age {yearsLived}, about {Math.max(currentGlobalIndex + 1, 0)} of {totalWeeks} weeks"
       {@attach (el) => {
@@ -575,9 +575,9 @@
         };
       }}
     >
-      <div class="life-calendar-rows" style="--max-weeks: {maxWeeks};">
+      <div class="life-calendar-rows flex flex-col" style="--max-weeks: {maxWeeks};">
         {#if showWeekGutter}
-          <div class="life-week-header life-year-row" aria-hidden="true">
+          <div class="life-week-header life-year-row flex items-center min-w-0" aria-hidden="true">
             <div class="year-gutter"></div>
             <div class="year-weeks week-gutter">
               {#each weekNumbers as weekNum (weekNum)}
@@ -588,7 +588,7 @@
         {/if}
         {#each years as year (year.age)}
           <div
-            class="life-year-row"
+            class="life-year-row flex items-center min-w-0"
             class:vt-year={vtAge === year.age}
             data-life-age={year.age}
           >
@@ -615,17 +615,17 @@
     </div>
   {:else if selectedYear && selected}
     <div class="week-view flex flex-col h-full min-h-0">
-      <div class="week-view-header">
-        <div class="week-view-heading">
+      <div class="week-view-header flex-shrink-0 flex flex-col">
+        <div class="week-view-heading flex items-center min-w-0">
           <button
             type="button"
-            class="week-back"
+            class="week-back flex-shrink-0"
             aria-label="Back to life calendar"
             onclick={closeWeek}
           >
             <IconChevronLeft />
           </button>
-          <div class="week-pane-meta">
+          <div class="week-pane-meta flex flex-col flex-1 min-w-0">
             <h1 class="week-pane-title">Week {selected.weekOfYear + 1}</h1>
             {#if weekRangeLabel}
               <span class="week-pane-dates">{weekRangeLabel}</span>
@@ -634,17 +634,19 @@
           {#if currentWeekMeta}
             <button
               type="button"
-              class="week-today"
-              disabled={isViewingToday}
-              aria-label="Jump to now"
+              class="week-today flex-shrink-0"
+              class:is-current={isViewingToday}
+              aria-label="Jump to now. Double-click to zoom out to life calendar"
+              title="Jump to now · Double-click to zoom out"
               onclick={goToToday}
+              ondblclick={closeWeek}
             >
               Now
             </button>
           {/if}
         </div>
         <div
-          class="life-year-row week-year-strip"
+          class="life-year-row week-year-strip flex items-center min-w-0"
           class:vt-year={vtAge === selectedYear.age}
           style="--max-weeks: {maxWeeks};"
         >
@@ -669,17 +671,17 @@
           </div>
         </div>
       </div>
-      <div class="week-stream" class:vt-pane={vtPane}>
-        <div class="stream-pins" class:is-future={stickyIsFuture}>
-          <div class="pin pin-year" style="height: {YEAR_STICKY_H}px">
-            <span class="pin-label">{stickyYearLabel}</span>
+      <div class="week-stream flex-1 min-h-0 flex flex-col overflow-hidden" class:vt-pane={vtPane}>
+        <div class="stream-pins flex-shrink-0" class:is-future={stickyIsFuture}>
+          <div class="pin pin-year flex items-center border-box" style="height: {YEAR_STICKY_H}px">
+            <span class="pin-label text-sm truncate">{stickyYearLabel}</span>
           </div>
-          <div class="pin pin-month" style="height: {MONTH_STICKY_H}px">
-            <span class="pin-label">{stickyMonthLabel}</span>
+          <div class="pin pin-month flex items-center border-box" style="height: {MONTH_STICKY_H}px">
+            <span class="pin-label text-sm truncate">{stickyMonthLabel}</span>
           </div>
         </div>
         <div
-          class="week-pane thin-scrollbar"
+          class="week-pane thin-scrollbar flex-1 min-h-0 overflow-y-auto"
           aria-label="Lifetime weeks scroller"
           {@attach (el) => {
             weekPaneEl = el;
@@ -689,30 +691,29 @@
           }}
           onscroll={onWeekPaneScroll}
         >
-          <div class="week-scroll-space" style="height: {topSpacer}px" aria-hidden="true"></div>
+          <div class="week-scroll-space flex-shrink-0" style="height: {topSpacer}px" aria-hidden="true"></div>
           {#each visibleWeeks as week (week.index)}
             {@const notes = notesForWeek(week.index)}
             <section
-              class="week-block"
+              class="week-block relative"
               class:is-focused={selected.index === week.index}
               class:is-future={week.status === 'future'}
               data-week-index={week.index}
             >
-              <header class="week-sticky">
-                <span class="week-sticky-title">Week {week.weekOfYear + 1}</span>
+              <header class="week-sticky flex items-center">
+                <span class="week-sticky-title text-sm">Week {week.weekOfYear + 1}</span>
               </header>
               {#if notes.length > 0}
-                <ul class="week-note-list">
+                <ul class="week-note-list flex flex-col">
                   {#each notes as note (note.guid)}
                     <li>
                       <button
                         type="button"
-                        class="week-note"
-                        class:active={selectedNoteGuid === note.guid}
+                        class="week-note flex items-center justify-between w-full border-box bg-transparent"
                         onclick={() => openWeekNote(note.guid)}
                       >
-                        <span class="week-note-name">{note.name}</span>
-                        <span class="week-note-when">{format(note.createdAt, 'EEE')}</span>
+                        <span class="week-note-name flex-1 min-w-0 truncate">{note.name}</span>
+                        <span class="week-note-when flex-shrink-0">{format(note.createdAt, 'EEE')}</span>
                       </button>
                     </li>
                   {/each}
@@ -720,7 +721,7 @@
               {/if}
             </section>
           {/each}
-          <div class="week-scroll-space" style="height: {bottomSpacer}px" aria-hidden="true"></div>
+          <div class="week-scroll-space flex-shrink-0" style="height: {bottomSpacer}px" aria-hidden="true"></div>
         </div>
       </div>
     </div>
@@ -729,7 +730,6 @@
 
 <style>
   .life-calendar {
-    position: relative;
     contain: layout;
     color: var(--text-color);
   }
@@ -740,7 +740,6 @@
   }
 
   .life-calendar-title {
-    flex-shrink: 0;
     opacity: 0.7;
     font-size: 11px;
     letter-spacing: 0.04em;
@@ -750,7 +749,6 @@
     font: inherit;
     text-align: left;
     cursor: pointer;
-    width: 100%;
     margin: 11px 15px;
   }
 
@@ -758,22 +756,12 @@
     opacity: 0.9;
   }
 
-  .life-calendar-scroll {
-    flex: 1;
-    min-height: 0;
-  }
-
   .life-calendar-rows {
-    display: flex;
-    flex-direction: column;
     gap: 1px;
   }
 
   .life-year-row {
-    display: flex;
-    align-items: center;
     gap: 4px;
-    min-width: 0;
   }
 
   .life-year-row.vt-year {
@@ -877,27 +865,16 @@
     position: relative;
   }
 
-  .week-view {
-    min-height: 0;
-  }
-
   .week-view-header {
-    flex-shrink: 0;
-    display: flex;
-    flex-direction: column;
     gap: 8px;
     padding: 8px 8px 10px;
   }
 
   .week-view-heading {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem; /* gap-3 */
-    min-width: 0;
+    gap: 0.75rem;
   }
 
   .week-back {
-    flex-shrink: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -919,7 +896,6 @@
   }
 
   .week-today {
-    flex-shrink: 0;
     margin-left: auto;
     margin-right: 2px;
     padding: 4px 8px;
@@ -934,11 +910,11 @@
     cursor: pointer;
   }
 
-  .week-today:hover:not(:disabled) {
+  .week-today:hover:not(.is-current) {
     background: color-mix(in srgb, var(--text-color) 8%, transparent);
   }
 
-  .week-today:disabled {
+  .week-today.is-current {
     opacity: 0.35;
     cursor: default;
   }
@@ -948,16 +924,10 @@
   }
 
   .week-stream {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
     margin: 0 8px 8px;
-    overflow: hidden;
   }
 
   .stream-pins {
-    flex-shrink: 0;
     z-index: 3;
     border-bottom: 1px solid color-mix(in srgb, var(--text-color) 8%, transparent);
   }
@@ -967,10 +937,7 @@
   }
 
   .pin {
-    display: flex;
-    align-items: center;
     padding: 0 10px;
-    box-sizing: border-box;
   }
 
   .pin-year {
@@ -978,13 +945,9 @@
   }
 
   .pin-label {
-    font-size: 0.875rem; /* text-sm */
     font-weight: 400;
     letter-spacing: 0.01em;
     opacity: 0.55;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   .pin-year .pin-label {
@@ -993,20 +956,15 @@
   }
 
   .week-pane {
-    flex: 1;
-    min-height: 0;
     padding: 0;
-    overflow-y: auto;
     overflow-anchor: none;
   }
 
   .week-scroll-space {
-    flex-shrink: 0;
     pointer-events: none;
   }
 
   .week-block {
-    position: relative;
     margin-bottom: 2px;
   }
 
@@ -1014,8 +972,6 @@
     position: sticky;
     top: 0;
     z-index: 2;
-    display: flex;
-    align-items: center;
     height: 28px;
     padding: 0 10px;
     background: color-mix(in srgb, var(--app-background) 92%, var(--text-color));
@@ -1033,18 +989,13 @@
   }
 
   .week-sticky-title {
-    font-size: 0.875rem; /* text-sm */
     font-weight: 400;
     letter-spacing: 0.01em;
     opacity: 0.55;
   }
 
   .week-pane-meta {
-    display: flex;
-    flex-direction: column;
     gap: 3px;
-    flex: 1;
-    min-width: 0;
   }
 
   .week-pane-title {
@@ -1065,48 +1016,30 @@
     list-style: none;
     margin: 0;
     padding: 0 4px 2px;
-    display: flex;
-    flex-direction: column;
   }
 
   .week-note {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
     gap: 8px;
-    width: 100%;
     height: 34px;
     margin: 0;
     padding: 0 8px;
     border: none;
     border-radius: 6px;
-    background: transparent;
     color: inherit;
     font: inherit;
     text-align: left;
     cursor: pointer;
-    box-sizing: border-box;
   }
 
   .week-note:hover {
     background: color-mix(in srgb, var(--text-color) 8%, transparent);
   }
 
-  .week-note.active {
-    background: color-mix(in srgb, var(--app-accent) 22%, transparent);
-  }
-
   .week-note-name {
-    flex: 1;
-    min-width: 0;
     font-size: 13px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   .week-note-when {
-    flex-shrink: 0;
     font-size: 11px;
     opacity: 0.4;
     font-variant-numeric: tabular-nums;

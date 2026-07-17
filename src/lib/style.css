@@ -23,18 +23,23 @@ html, body { margin: 0; padding: 0; font-family: Verdana, Geneva, Tahoma, sans-s
 .border-box { box-sizing: border-box; }
 .elipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 10px; }
 .flex { display: flex; }
+.flex-1 { flex: 1 1 0%; }
 .flex-col { flex-direction: column; }
 .flex-grow { flex-grow: 1; }
 .flex-grow-0 { flex-grow: 0; }
+.flex-shrink-0 { flex-shrink: 0; }
 .h-\[10px\] { height: 10px; }
 .h-full { height: 100%; }
 .h-screen {  height: 100dvh; }
 .hidden { display: none; }
+.inset-0 { inset: 0; }
 .items-center { align-items: center; }
 .justify-between { justify-content: space-between; }
 .justify-center { justify-content: center; }
 .justify-end { justify-content: flex-end; }
 .m-1\.5 { margin: 0.375rem; }
+.min-h-0 { min-height: 0; }
+.min-w-0 { min-width: 0; }
 .no-resize { resize: none; }
 .outline-none { outline: none; }
 .overflow-hidden { overflow: hidden; }
