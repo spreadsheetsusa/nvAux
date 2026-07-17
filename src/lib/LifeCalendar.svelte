@@ -15,6 +15,13 @@
 
   const MAX_WEEKS = 53;
   const WEEK_GUTTER_MIN_WIDTH = 712;
+  const YEAR_STICKY_H = 28;
+  const MONTH_STICKY_H = 26;
+  const WEEK_STICKY_H = 28;
+  const WEEK_NOTE_H = 34;
+  const WEEK_SECTION_GAP = 2;
+  const WEEK_OVERSCAN = 24;
+
   /** @param {string} iso YYYY-MM-DD in local time (avoids UTC parse shift) */
   function parseLocalDate(iso) {
     const [y, m, d] = iso.split('-').map(Number);
@@ -65,6 +72,78 @@
     return { years, maxWeeks: MAX_WEEKS, currentGlobalIndex, totalWeeks: globalIndex };
   }
 
+  /**
+   * @param {ReturnType<typeof buildLifeYears>['years']} yearRows
+   */
+  function buildLifetimeWeeks(yearRows) {
+    /** @type {Array<{
+     *   index: number,
+     *   age: number,
+     *   weekOfYear: number,
+     *   start: Date,
+     *   end: Date,
+     *   startMs: number,
+     *   endMs: number,
+     *   status: string,
+     *   rangeLabel: string,
+     * }>} */
+    const list = [];
+    for (const year of yearRows) {
+      for (let w = 0; w < year.weekCount; w++) {
+        const week = year.weeks[w];
+        if (typeof week.index !== 'number') continue;
+        const start = addDays(year.start, w * 7);
+        const end =
+          w === year.weekCount - 1 ? year.end : addDays(year.start, (w + 1) * 7);
+        list.push({
+          index: week.index,
+          age: year.age,
+          weekOfYear: w,
+          start,
+          end,
+          startMs: start.getTime(),
+          endMs: end.getTime(),
+          status: week.status,
+          rangeLabel: `${format(start, 'MMM d')} – ${format(addDays(end, -1), 'MMM d, yyyy')}`,
+        });
+      }
+    }
+    return list;
+  }
+
+  /**
+   * @param {Array<{ startMs: number, endMs: number, index: number }>} weeks
+   * @param {number} ts
+   */
+  function findWeekListIndexForTs(weeks, ts) {
+    let lo = 0;
+    let hi = weeks.length - 1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      const week = weeks[mid];
+      if (ts < week.startMs) hi = mid - 1;
+      else if (ts >= week.endMs) lo = mid + 1;
+      else return mid;
+    }
+    return -1;
+  }
+
+  /**
+   * @param {number[]} offsets
+   * @param {number} y
+   */
+  function findWeekListIndexAtOffset(offsets, y) {
+    let lo = 0;
+    let hi = offsets.length - 2;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (y < offsets[mid]) hi = mid - 1;
+      else if (y >= offsets[mid + 1]) lo = mid + 1;
+      else return mid;
+    }
+    return Math.max(0, Math.min(offsets.length - 2, lo));
+  }
+
   let birth = $derived(parseLocalDate($birthDate || '1982-05-24'));
   let yearsCount = $derived(Math.max(1, parseInt($expectedLongevity, 10) || 80));
   let life = $derived(buildLifeYears(birth, yearsCount, today));
@@ -101,6 +180,7 @@
 
   let weekNumbers = $derived(Array.from({ length: maxWeeks }, (_, i) => i));
   let showWeekGutter = $derived($sidebarWidth >= WEEK_GUTTER_MIN_WIDTH);
+  let lifetimeWeeks = $derived(buildLifetimeWeeks(years));
 
   /** @type {{ age: number, weekOfYear: number, index: number } | null} */
   let selected = $state.raw(null);
@@ -117,29 +197,83 @@
   let scopeEl = $state(null);
   /** @type {HTMLElement | null} */
   let scrollEl = $state(null);
+  /** @type {HTMLElement | null} */
+  let weekPaneEl = $state(null);
   /** @type {any} */
   let db$ = $state(null);
-  /** @type {any[]} */
-  let weekNotes = $state([]);
+  /** @type {Map<number, any[]>} */
+  let notesByWeek = $state.raw(new Map());
+  let scrollSyncLock = $state(false);
+  let virtualScrollTop = $state(0);
+  /** Pending list index to scroll to after week view mounts */
+  /** @type {number | null} */
+  let pendingScrollListIndex = $state(null);
 
   let inWeekView = $derived(selected !== null);
   let selectedYear = $derived(
     selected ? years.find((y) => y.age === selected.age) : null,
   );
-  let selectedWeekRange = $derived.by(() => {
-    if (!selected || !selectedYear) return null;
-    const start = addDays(selectedYear.start, selected.weekOfYear * 7);
-    const end =
-      selected.weekOfYear === selectedYear.weekCount - 1
-        ? selectedYear.end
-        : addDays(selectedYear.start, (selected.weekOfYear + 1) * 7);
-    return { start, end, startMs: start.getTime(), endMs: end.getTime() };
-  });
+  let selectedWeekMeta = $derived(
+    selected ? lifetimeWeeks.find((w) => w.index === selected.index) : null,
+  );
   let selectedNoteGuid = $derived($selectedNote?.guid);
-  let weekRangeLabel = $derived(
-    selectedWeekRange
-      ? `${format(selectedWeekRange.start, 'MMM d')} – ${format(addDays(selectedWeekRange.end, -1), 'MMM d, yyyy')}`
-      : '',
+  let weekRangeLabel = $derived(selectedWeekMeta?.rangeLabel ?? '');
+  let stickyYearLabel = $derived(
+    selected != null ? `Age ${selected.age}` : '',
+  );
+  let stickyMonthLabel = $derived(
+    selectedWeekMeta ? format(selectedWeekMeta.start, 'MMMM yyyy') : '',
+  );
+  let stickyIsFuture = $derived(selectedWeekMeta?.status === 'future');
+  let currentWeekMeta = $derived(
+    lifetimeWeeks.find((w) => w.status === 'current') ??
+      (currentGlobalIndex >= 0
+        ? lifetimeWeeks.find((w) => w.index === currentGlobalIndex)
+        : undefined),
+  );
+  let isViewingToday = $derived(
+    !!selected && !!currentWeekMeta && selected.index === currentWeekMeta.index,
+  );
+
+  let weekHeights = $derived.by(() => {
+    const map = notesByWeek;
+    return lifetimeWeeks.map((week) => {
+      const notes = map.get(week.index);
+      const body = notes?.length ? notes.length * WEEK_NOTE_H : 0;
+      return WEEK_STICKY_H + body + WEEK_SECTION_GAP;
+    });
+  });
+
+  let weekOffsets = $derived.by(() => {
+    const offsets = new Array(weekHeights.length + 1);
+    offsets[0] = 0;
+    for (let i = 0; i < weekHeights.length; i++) {
+      offsets[i + 1] = offsets[i] + weekHeights[i];
+    }
+    return offsets;
+  });
+
+  let totalScrollHeight = $derived(
+    weekOffsets.length > 0 ? weekOffsets[weekOffsets.length - 1] : 0,
+  );
+
+  let virtualRange = $derived.by(() => {
+    const count = lifetimeWeeks.length;
+    if (count === 0) return { start: 0, end: 0 };
+    const viewport = weekPaneEl?.clientHeight ?? 480;
+    const top = virtualScrollTop;
+    const bottom = top + viewport;
+    let start = findWeekListIndexAtOffset(weekOffsets, top);
+    let end = findWeekListIndexAtOffset(weekOffsets, Math.max(top, bottom - 1));
+    start = Math.max(0, start - WEEK_OVERSCAN);
+    end = Math.min(count, end + 1 + WEEK_OVERSCAN);
+    return { start, end };
+  });
+
+  let visibleWeeks = $derived(lifetimeWeeks.slice(virtualRange.start, virtualRange.end));
+  let topSpacer = $derived(weekOffsets[virtualRange.start] ?? 0);
+  let bottomSpacer = $derived(
+    Math.max(0, totalScrollHeight - (weekOffsets[virtualRange.end] ?? totalScrollHeight)),
   );
 
   onMount(async () => {
@@ -148,27 +282,47 @@
 
   $effect(() => {
     const database = db$;
-    const range = selectedWeekRange;
-    if (!database || !range) {
-      weekNotes = [];
+    const weeks = lifetimeWeeks;
+    if (!database || !inWeekView || weeks.length === 0) {
+      notesByWeek = new Map();
       return;
     }
+
+    const startMs = weeks[0].startMs;
+    const endMs = weeks[weeks.length - 1].endMs;
 
     const subscription = database.notes
       .find({
         selector: {
           createdAt: {
-            $gte: range.startMs,
-            $lt: range.endMs,
+            $gte: startMs,
+            $lt: endMs,
           },
         },
         sort: [{ createdAt: 'asc' }],
       })
       .$.subscribe((results) => {
-        weekNotes = results;
+        /** @type {Map<number, any[]>} */
+        const map = new Map();
+        for (const note of results) {
+          const listIdx = findWeekListIndexForTs(weeks, note.createdAt);
+          if (listIdx < 0) continue;
+          const weekIndex = weeks[listIdx].index;
+          const bucket = map.get(weekIndex);
+          if (bucket) bucket.push(note);
+          else map.set(weekIndex, [note]);
+        }
+        notesByWeek = map;
       });
 
     return () => subscription.unsubscribe();
+  });
+
+  $effect(() => {
+    if (!inWeekView || pendingScrollListIndex == null || !weekPaneEl) return;
+    const listIndex = pendingScrollListIndex;
+    pendingScrollListIndex = null;
+    scrollToListIndex(listIndex, false);
   });
 
   function cycleTitleStat() {
@@ -238,6 +392,46 @@
     }
   }
 
+  let scrollLockGen = 0;
+
+  /**
+   * @param {number} listIndex
+   * @param {boolean} [smooth]
+   */
+  function scrollToListIndex(listIndex, smooth = true) {
+    const pane = weekPaneEl;
+    if (!pane || listIndex < 0 || listIndex >= lifetimeWeeks.length) return;
+    const gen = ++scrollLockGen;
+    const unlock = () => {
+      if (gen === scrollLockGen) scrollSyncLock = false;
+    };
+    scrollSyncLock = true;
+    virtualScrollTop = weekOffsets[listIndex] ?? 0;
+    const behavior = smooth && !prefersReducedMotion() ? 'smooth' : 'auto';
+    pane.scrollTo({
+      top: weekOffsets[listIndex] ?? 0,
+      behavior,
+    });
+    if (behavior === 'smooth') {
+      pane.addEventListener('scrollend', unlock, { once: true });
+      window.setTimeout(unlock, 1500);
+    } else {
+      window.setTimeout(unlock, 50);
+    }
+  }
+
+  function goToToday() {
+    const week = currentWeekMeta;
+    if (!week || !selected || selected.index === week.index) return;
+    selected = {
+      age: week.age,
+      weekOfYear: week.weekOfYear,
+      index: week.index,
+    };
+    const listIndex = lifetimeWeeks.findIndex((w) => w.index === week.index);
+    scrollToListIndex(listIndex >= 0 ? listIndex : week.index, true);
+  }
+
   /**
    * @param {number} age
    * @param {number} weekOfYear
@@ -254,6 +448,9 @@
     try {
       await withViewTransition(() => {
         selected = { age, weekOfYear, index };
+        const listIndex = lifetimeWeeks.findIndex((w) => w.index === index);
+        pendingScrollListIndex = listIndex >= 0 ? listIndex : index;
+        virtualScrollTop = weekOffsets[pendingScrollListIndex] ?? 0;
       });
     } finally {
       clearVtTargets();
@@ -267,26 +464,12 @@
    * @param {number} weekOfYear
    * @param {number} index
    */
-  async function selectWeekInYear(age, weekOfYear, index) {
-    if (navigating || !selected) return;
+  function selectWeekInYear(age, weekOfYear, index) {
+    if (!selected) return;
     if (selected.index === index) return;
-    const goingForward = index > selected.index;
-    navigating = true;
-    // Morph only the week cell; keep year strip still. Name the pane for a directional slide.
-    vtWeekIndex = selected.index;
-    vtPane = true;
-    setLifeNav(goingForward ? 'week-fwd' : 'week-back');
-    await tick();
-    try {
-      await withViewTransition(() => {
-        vtWeekIndex = index;
-        selected = { age, weekOfYear, index };
-      });
-    } finally {
-      clearVtTargets();
-      clearLifeNav();
-      navigating = false;
-    }
+    selected = { age, weekOfYear, index };
+    const listIndex = lifetimeWeeks.findIndex((w) => w.index === index);
+    scrollToListIndex(listIndex >= 0 ? listIndex : index, true);
   }
 
   async function closeWeek() {
@@ -301,6 +484,8 @@
     try {
       await withViewTransition(() => {
         selected = null;
+        pendingScrollListIndex = null;
+        virtualScrollTop = 0;
       });
       await tick();
       scrollEl
@@ -327,11 +512,37 @@
     }
   }
 
+  /** @param {Event & { currentTarget: HTMLElement }} e */
+  function onWeekPaneScroll(e) {
+    const top = e.currentTarget.scrollTop;
+    virtualScrollTop = top;
+    if (scrollSyncLock || lifetimeWeeks.length === 0) return;
+    const listIndex = findWeekListIndexAtOffset(weekOffsets, top + 1);
+    const week = lifetimeWeeks[listIndex];
+    if (!week) return;
+    if (
+      !selected ||
+      selected.index !== week.index ||
+      selected.age !== week.age ||
+      selected.weekOfYear !== week.weekOfYear
+    ) {
+      selected = {
+        age: week.age,
+        weekOfYear: week.weekOfYear,
+        index: week.index,
+      };
+    }
+  }
+
   /** @param {string} guid */
   function openWeekNote(guid) {
     selectNoteByGuid(guid);
   }
 
+  /** @param {number} weekIndex */
+  function notesForWeek(weekIndex) {
+    return notesByWeek.get(weekIndex) ?? [];
+  }
 </script>
 
 <div
@@ -402,21 +613,34 @@
         {/each}
       </div>
     </div>
-  {:else if selectedYear}
+  {:else if selectedYear && selected}
     <div class="week-view flex flex-col h-full min-h-0">
       <div class="week-view-header">
-        <button
-          type="button"
-          class="week-back"
-          aria-label="Back to life calendar"
-          onclick={closeWeek}
-        >
-          <IconChevronLeft />
-        </button>
-        <div class="week-pane-meta">
-          <h1 class="week-pane-title">Week {selected.weekOfYear + 1}</h1>
-          {#if weekRangeLabel}
-            <span class="week-pane-dates">{weekRangeLabel}</span>
+        <div class="week-view-heading">
+          <button
+            type="button"
+            class="week-back"
+            aria-label="Back to life calendar"
+            onclick={closeWeek}
+          >
+            <IconChevronLeft />
+          </button>
+          <div class="week-pane-meta">
+            <h1 class="week-pane-title">Week {selected.weekOfYear + 1}</h1>
+            {#if weekRangeLabel}
+              <span class="week-pane-dates">{weekRangeLabel}</span>
+            {/if}
+          </div>
+          {#if currentWeekMeta}
+            <button
+              type="button"
+              class="week-today"
+              disabled={isViewingToday}
+              aria-label="Jump to today"
+              onclick={goToToday}
+            >
+              Today
+            </button>
           {/if}
         </div>
         <div
@@ -445,30 +669,59 @@
           </div>
         </div>
       </div>
-      <div
-        class="week-pane thin-scrollbar"
-        class:vt-pane={vtPane}
-        aria-label="Week {selected.weekOfYear + 1} of age {selected.age}"
-      >
-        {#if weekNotes.length === 0}
-          <p class="week-pane-empty">No notes created this week</p>
-        {:else}
-          <ul class="week-note-list">
-            {#each weekNotes as note (note.guid)}
-              <li>
-                <button
-                  type="button"
-                  class="week-note"
-                  class:active={selectedNoteGuid === note.guid}
-                  onclick={() => openWeekNote(note.guid)}
-                >
-                  <span class="week-note-name">{note.name}</span>
-                  <span class="week-note-when">{format(note.createdAt, 'EEE')}</span>
-                </button>
-              </li>
-            {/each}
-          </ul>
-        {/if}
+      <div class="week-stream" class:vt-pane={vtPane}>
+        <div class="stream-pins" class:is-future={stickyIsFuture}>
+          <div class="pin pin-year" style="height: {YEAR_STICKY_H}px">
+            <span class="pin-label">{stickyYearLabel}</span>
+          </div>
+          <div class="pin pin-month" style="height: {MONTH_STICKY_H}px">
+            <span class="pin-label">{stickyMonthLabel}</span>
+          </div>
+        </div>
+        <div
+          class="week-pane thin-scrollbar"
+          aria-label="Lifetime weeks scroller"
+          {@attach (el) => {
+            weekPaneEl = el;
+            return () => {
+              if (weekPaneEl === el) weekPaneEl = null;
+            };
+          }}
+          onscroll={onWeekPaneScroll}
+        >
+          <div class="week-scroll-space" style="height: {topSpacer}px" aria-hidden="true"></div>
+          {#each visibleWeeks as week (week.index)}
+            {@const notes = notesForWeek(week.index)}
+            <section
+              class="week-block"
+              class:is-focused={selected.index === week.index}
+              class:is-future={week.status === 'future'}
+              data-week-index={week.index}
+            >
+              <header class="week-sticky">
+                <span class="week-sticky-title">Week {week.weekOfYear + 1}</span>
+              </header>
+              {#if notes.length > 0}
+                <ul class="week-note-list">
+                  {#each notes as note (note.guid)}
+                    <li>
+                      <button
+                        type="button"
+                        class="week-note"
+                        class:active={selectedNoteGuid === note.guid}
+                        onclick={() => openWeekNote(note.guid)}
+                      >
+                        <span class="week-note-name">{note.name}</span>
+                        <span class="week-note-when">{format(note.createdAt, 'EEE')}</span>
+                      </button>
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+            </section>
+          {/each}
+          <div class="week-scroll-space" style="height: {bottomSpacer}px" aria-hidden="true"></div>
+        </div>
       </div>
     </div>
   {/if}
@@ -533,7 +786,7 @@
     contain: layout;
   }
 
-  .week-pane.vt-pane {
+  .week-stream.vt-pane {
     view-transition-name: life-pane;
     contain: layout;
   }
@@ -636,8 +889,15 @@
     padding: 8px 8px 10px;
   }
 
+  .week-view-heading {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem; /* gap-3 */
+    min-width: 0;
+  }
+
   .week-back {
-    align-self: flex-start;
+    flex-shrink: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -658,25 +918,136 @@
     background: color-mix(in srgb, var(--text-color) 8%, transparent);
   }
 
+  .week-today {
+    flex-shrink: 0;
+    margin-left: auto;
+    margin-right: 2px;
+    padding: 4px 8px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--app-accent);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+  }
+
+  .week-today:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--app-accent) 12%, transparent);
+  }
+
+  .week-today:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+
   .week-year-strip {
     padding: 0 2px;
+  }
+
+  .week-stream {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    margin: 0 8px 8px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--text-color) 4%, transparent);
+    overflow: hidden;
+  }
+
+  .stream-pins {
+    flex-shrink: 0;
+    z-index: 3;
+    background: color-mix(in srgb, var(--app-background) 94%, var(--text-color));
+    border-bottom: 1px solid color-mix(in srgb, var(--text-color) 8%, transparent);
+  }
+
+  .stream-pins.is-future {
+    opacity: 0.38;
+  }
+
+  .pin {
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    box-sizing: border-box;
+  }
+
+  .pin-year {
+    border-bottom: 1px solid color-mix(in srgb, var(--text-color) 6%, transparent);
+  }
+
+  .pin-label {
+    font-size: 0.875rem; /* text-sm */
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    opacity: 0.55;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .pin-year .pin-label {
+    font-weight: 600;
+    opacity: 0.72;
   }
 
   .week-pane {
     flex: 1;
     min-height: 0;
-    margin: 0 8px 8px;
-    padding: 10px 8px;
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--text-color) 4%, transparent);
+    padding: 0;
     overflow-y: auto;
+    overflow-anchor: none;
+  }
+
+  .week-scroll-space {
+    flex-shrink: 0;
+    pointer-events: none;
+  }
+
+  .week-block {
+    position: relative;
+    margin-bottom: 2px;
+  }
+
+  .week-sticky {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    height: 28px;
+    padding: 0 10px;
+    background: color-mix(in srgb, var(--app-background) 92%, var(--text-color));
+    border-bottom: 1px solid color-mix(in srgb, var(--text-color) 8%, transparent);
+    backdrop-filter: blur(6px);
+  }
+
+  .week-block.is-focused .week-sticky-title {
+    color: var(--app-accent);
+    opacity: 1;
+  }
+
+  .week-block.is-future {
+    opacity: 0.38;
+  }
+
+  .week-sticky-title {
+    font-size: 0.875rem; /* text-sm */
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    opacity: 0.55;
   }
 
   .week-pane-meta {
     display: flex;
     flex-direction: column;
     gap: 3px;
-    padding: 0 2px;
+    flex: 1;
+    min-width: 0;
   }
 
   .week-pane-title {
@@ -693,19 +1064,12 @@
     opacity: 0.45;
   }
 
-  .week-pane-empty {
-    margin: 8px 4px;
-    font-size: 12px;
-    opacity: 0.4;
-  }
-
   .week-note-list {
     list-style: none;
     margin: 0;
-    padding: 0;
+    padding: 0 4px 2px;
     display: flex;
     flex-direction: column;
-    gap: 2px;
   }
 
   .week-note {
@@ -714,8 +1078,9 @@
     justify-content: space-between;
     gap: 8px;
     width: 100%;
+    height: 34px;
     margin: 0;
-    padding: 8px 8px;
+    padding: 0 8px;
     border: none;
     border-radius: 6px;
     background: transparent;
@@ -723,6 +1088,7 @@
     font: inherit;
     text-align: left;
     cursor: pointer;
+    box-sizing: border-box;
   }
 
   .week-note:hover {
@@ -773,8 +1139,16 @@
       opacity: 0.7;
     }
 
-    .week-pane {
+    .week-stream {
       background: color-mix(in srgb, #fff 4%, transparent);
+    }
+
+    .stream-pins {
+      background: color-mix(in srgb, var(--app-background) 94%, #fff);
+    }
+
+    .week-sticky {
+      background: color-mix(in srgb, var(--app-background) 92%, #fff);
     }
   }
 </style>
