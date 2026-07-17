@@ -1,27 +1,21 @@
 <script>
-  import { createEventDispatcher } from 'svelte';
-
-  export let note;
-  export let x = 0;
-  export let y = 0;
-
-  const dispatch = createEventDispatcher();
+  let { note, x = 0, y = 0, ondelete, onclose } = $props();
 
   function handleDelete() {
-    dispatch('delete', note);
+    ondelete?.(note);
   }
 
   function handleClose() {
-    dispatch('close');
+    onclose?.();
   }
 </script>
 
-<div 
-  class="context-menu" 
+<div
+  class="context-menu"
   style="position: fixed; left: {x}px; top: {y}px;"
 >
-  <button on:click={handleDelete}>Delete</button>
-  <button on:click={handleClose}>Close</button>
+  <button onclick={handleDelete}>Delete</button>
+  <button onclick={handleClose}>Close</button>
 </div>
 
 <style>

@@ -1,9 +1,7 @@
 import { writable } from 'svelte/store';
-import { v4 as uuidv4 } from 'uuid';
 
 import { addRxPlugin, createRxDatabase } from 'rxdb';
 import { getRxStorageDexie } from 'rxdb/plugins/storage-dexie';
-import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
 
 import { schema } from './schema';
 
@@ -12,23 +10,46 @@ import { schema } from './schema';
  */
 
 const storedNoteListHeight = localStorage.getItem('noteListHeight') || 220;
+const storedSidebarWidth = localStorage.getItem('sidebarWidth') || 443;
 const storedFullScreen = JSON.parse(localStorage.getItem('fullScreen')) || false;
 const storedMaximumFullScreen = JSON.parse(localStorage.getItem('maximumFullScreen')) || true;
 const storedShowClock = JSON.parse(localStorage.getItem('showClock')) || "true";
+const storedSidebarOpen = JSON.parse(localStorage.getItem('sidebarOpen')) || false;
+const storedBirthDate = localStorage.getItem('birthDate') || '1982-05-24';
+const storedExpectedLongevity = localStorage.getItem('expectedLongevity') || '80';
+const LIFE_CALENDAR_STATS = ['percentLived', 'yearsLived', 'percentRemaining', 'yearsRemaining'];
+const storedLifeCalendarStat = LIFE_CALENDAR_STATS.includes(localStorage.getItem('lifeCalendarStat'))
+  ? localStorage.getItem('lifeCalendarStat')
+  : 'percentLived';
 
 /**
  * RxDB ************************************************************************
  */
 
-addRxPlugin(RxDBDevModePlugin);
+/** Bumped with RxDB 17 schema (indexed fields must be required). */
+const DB_NAME = 'nvauxdb17';
 
 let dbPromise;
 
 const _create = async () => {
+  const isDev = import.meta.env.DEV;
+
+  if (isDev) {
+    const { RxDBDevModePlugin } = await import('rxdb/plugins/dev-mode');
+    addRxPlugin(RxDBDevModePlugin);
+  }
+
+  const baseStorage = getRxStorageDexie();
+  const storage = isDev
+    ? (await import('rxdb/plugins/validate-ajv')).wrappedValidateAjvStorage({
+        storage: baseStorage,
+      })
+    : baseStorage;
+
   const db = await createRxDatabase({
-    name: 'nvauxdb',
-    storage: getRxStorageDexie(),
-    ignoreDuplicate: true
+    name: DB_NAME,
+    storage,
+    ignoreDuplicate: isDev,
   });
 
   await db.addCollections({ notes: { schema } });
@@ -73,13 +94,6 @@ Don't forget to follow the project on 𝕏 at @nvAuxApp and let us know what you
       createdAt: new Date().getTime(),
       updatedAt: new Date().getTime()
     });
-    // await db.notes.insert({
-    //   guid: '00000000-0000-0000-0000-111111111111',
-    //   name: 'Sketch Pad Demo',
-    //   body: 'Use this demo note to test out the sketch pad feature.',
-    //   createdAt: new Date().getTime(),
-    //   updatedAt: new Date().getTime()
-    // });
   };
 
 
@@ -96,13 +110,35 @@ export const db = () => dbPromise ? dbPromise : _create();
 export const omniMode = writable('search');
 export const omniText = writable('');
 export const noteList = writable([]);
-export const noteListHeight = writable(storedNoteListHeight);
+export const noteListHeight = writable(Number(storedNoteListHeight));
+export const sidebarWidth = writable(Number(storedSidebarWidth));
 export const selectedNote = writable({});
 export const bodyText = writable('');
+export const markdownPreview = writable(false);
 export const fullScreen = writable(storedFullScreen);
 export const maximumFullScreen = writable(storedMaximumFullScreen);
 export const showClock = writable(storedShowClock);
+export const sidebarOpen = writable(storedSidebarOpen);
+export const birthDate = writable(storedBirthDate);
+export const expectedLongevity = writable(storedExpectedLongevity);
+export const lifeCalendarStat = writable(storedLifeCalendarStat);
+export const LIFE_CALENDAR_STAT_MODES = LIFE_CALENDAR_STATS;
 
+/**
+ * Open a note by guid in NoteDetail and select it in the list.
+ * Does not alter omniText / filter mode.
+ * @param {string} guid
+ * @returns {Promise<object | null>}
+ */
+export async function selectNoteByGuid(guid) {
+  if (!guid) return null;
+  const database = await db();
+  const note = await database.notes.findOne(guid).exec();
+  if (!note) return null;
+  selectedNote.set(note);
+  bodyText.set(note.body ?? '');
+  return note;
+}
 
 omniText.subscribe(v => {
   if (v === '') {
@@ -113,7 +149,12 @@ omniText.subscribe(v => {
 });
 
 noteListHeight.subscribe(v => localStorage.setItem('noteListHeight', v.toString()));
+sidebarWidth.subscribe(v => localStorage.setItem('sidebarWidth', v.toString()));
 
 fullScreen.subscribe(v => localStorage.setItem('fullScreen', v));
 maximumFullScreen.subscribe(v => localStorage.setItem('maximumFullScreen', v));
 showClock.subscribe(v => localStorage.setItem('showClock', v));
+sidebarOpen.subscribe(v => localStorage.setItem('sidebarOpen', v));
+birthDate.subscribe(v => localStorage.setItem('birthDate', v));
+expectedLongevity.subscribe(v => localStorage.setItem('expectedLongevity', v));
+lifeCalendarStat.subscribe(v => localStorage.setItem('lifeCalendarStat', v));

@@ -6,8 +6,17 @@
   import ResizeHandle from './lib/ResizeHandle.svelte';
   import NoteDetail from './lib/NoteDetail.svelte';
   import StatusBar from './lib/StatusBar.svelte';
+  import Sidebar from './lib/Sidebar.svelte';
 
-  import { fullScreen, maximumFullScreen } from './lib/store';
+  import { fullScreen, maximumFullScreen, sidebarOpen, sidebarWidth, noteListHeight } from './lib/store';
+
+  let mainContent;
+
+  function getNoteListMax() {
+    if (!mainContent) return 600;
+    // Leave room for OmniBar, resize handle, NoteDetail, and StatusBar
+    return Math.max(80, mainContent.clientHeight - 220);
+  }
 
   onMount(() => {
     if ("serviceWorker" in navigator) {
@@ -46,14 +55,27 @@
     </div>
 
   <main
-    class="{$fullScreen ? 'fullscreen' : 'windowed'} relative overflow-hidden flex flex-col transition-all"
-    style="{$fullScreen ? $maximumFullScreen ? 'height: 100%; width: 100%;' : 'height: calc(100dvh - 15px); width: calc(100vw - 15px); border-radius: 8px;' : ''} background-color: var(--app-background);"
+    class="{$fullScreen ? 'fullscreen' : 'windowed'} relative overflow-hidden flex transition-all"
+    class:sidebar-open={$sidebarOpen}
+    style="{$fullScreen ? $maximumFullScreen ? 'height: 100%; width: 100%;' : 'height: calc(100dvh - 15px); width: calc(100vw - 15px); border-radius: 8px;' : ''} background-color: var(--app-background); --sidebar-width: {$sidebarWidth}px;"
   >
-    <OmniBar />
-    <NoteList />
-    <ResizeHandle />
-    <NoteDetail />
-    <StatusBar />
+    <Sidebar />
+    <div
+      class="main-content relative flex flex-col flex-grow overflow-hidden"
+      bind:this={mainContent}
+    >
+      <OmniBar />
+      <NoteList />
+      <ResizeHandle
+        orientation="vertical"
+        bind:value={$noteListHeight}
+        min={60}
+        getMax={getNoteListMax}
+        ariaLabel="Resize note list"
+      />
+      <NoteDetail />
+      <StatusBar />
+    </div>
   </main>
 </div>
 
@@ -81,9 +103,23 @@
     width: 100%;
     height: 50%;
     min-height: 300px;
+    flex-grow: 0;
+    flex-shrink: 0;
     border-radius: 8px;
     border: 1px solid #3a3f412e;
     -webkit-box-shadow: 0px 36px 69px -24px rgba(0,0,0,0.75);
     box-shadow: 0px 36px 69px -24px rgba(0,0,0,0.75);
+  }
+  main.windowed.sidebar-open {
+    max-width: calc(690px + var(--sidebar-width, 443px));
+  }
+  .main-content {
+    position: relative;
+    z-index: 1;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+    background-color: var(--app-background);
   }
 </style>

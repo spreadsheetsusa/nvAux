@@ -1,26 +1,25 @@
 <script>
-	import { createEventDispatcher } from 'svelte';
-	const dispatch = createEventDispatcher();
-
-	export let colors = [
-		'#d58141',
-		'#d7c44c',
-		'#4fa9cc',
-		'#3f8d27',
-	]
-
-	export let paletteColor
-	export let background = '#fff'
+	let {
+		colors = [
+			'#d58141',
+			'#d7c44c',
+			'#4fa9cc',
+			'#3f8d27',
+		],
+		paletteColor = $bindable(),
+		background = '#fff',
+		oncolor,
+	} = $props();
 </script>
 
 <section>
 	<div>
 		{#each colors as color}
 		<button
-						on:click="{() => {
-							dispatch('color', { color })
+						onclick={() => {
+							oncolor?.({ color })
 							paletteColor = color
-						}}"
+						}}
 						style:background={color}>
 			<span class="visually-hidden">
 				Select the color {color}
@@ -30,8 +29,8 @@
 	</div>
 
 	<button
-					on:click={() => {
-						dispatch('color', { color: background })
+					onclick={() => {
+						oncolor?.({ color: background })
 						paletteColor = background
 					}}
 					style:background>

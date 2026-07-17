@@ -16,6 +16,6 @@
   };
 </script>
 
-<button aria-label="Download Notes" on:click={handleDownloadZip} class="btn bg-gray-800" style="font-size: 14px;">
+<button aria-label="Download Notes" onclick={handleDownloadZip} class="btn bg-gray-800" style="font-size: 14px;">
     Download Notes
 </button>
