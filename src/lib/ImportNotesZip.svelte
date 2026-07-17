@@ -39,7 +39,7 @@
   </label>
   <input
     bind:files
-    on:change={handleImport}
+    onchange={handleImport}
     id="file-upload"
     type="file"
     class="hidden"

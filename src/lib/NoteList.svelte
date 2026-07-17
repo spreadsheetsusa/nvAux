@@ -1,51 +1,65 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { formatDistanceToNow } from 'date-fns';
 
-  import { selectedNote, bodyText, db, omniText, omniMode, noteListHeight } from './store';
+  import { selectedNote, bodyText, db, omniText, noteListHeight } from './store';
+  import FileListItemContextMenu from './FileListItemContextMenu.svelte';
 
-  let db$;
-  let isMouseDown = false;
-  let noteList = [];
+  let db$ = $state(null);
+  let isMouseDown = $state(false);
+  let notes = $state([]);
 
-  onMount(() => {
-    const getNoteList = async () => {
-      db$ = await db();
-      db$.notes
-        .find({
-          selector: {
-            $or: [{ name: { $regex: `.*${$omniText}.*` } }, { body: { $regex: `.*${$omniText}.*` } }],
-          },
-          sort: [{ updatedAt: 'desc' }],
-        })
-        .$.subscribe((notes) => (noteList = notes));
-    };
-    getNoteList();
+  let showContextMenu = $state(false);
+  let contextMenuNote = $state(null);
+  let contextMenuX = $state(0);
+  let contextMenuY = $state(0);
+
+  function handleClickOutside(event) {
+    if (showContextMenu && !event.target.closest('.context-menu')) {
+      handleCloseContextMenu();
+    }
+  }
+
+  onMount(async () => {
+    db$ = await db();
+    document.addEventListener('click', handleClickOutside);
   });
 
-  $: omniText.subscribe((v) => {
-    db$ &&
-      !$selectedNote &&
-      db$.notes
-        .find({
-          selector: {
-            $or: [{ name: { $regex: `.*${v}.*` } }, { body: { $regex: `.*${v}.*` } }],
-          },
-          sort: [{ updatedAt: 'desc' }],
-        })
-        .$.subscribe((notes) => (noteList = notes));
+  onDestroy(() => {
+    document.removeEventListener('click', handleClickOutside);
   });
 
-  // const deleteNote = async (note) => await note.remove();
+  $effect(() => {
+    const database = db$;
+    const queryText = $omniText;
+
+    if (!database) return;
+
+    const subscription = database.notes
+      .find({
+        selector: {
+          $or: [
+            { name: { $regex: `.*${queryText}.*` } },
+            { body: { $regex: `.*${queryText}.*` } },
+          ],
+        },
+        sort: [{ updatedAt: 'desc' }],
+      })
+      .$.subscribe((results) => {
+        notes = results;
+      });
+
+    return () => subscription.unsubscribe();
+  });
+
   const formatDate = (str) => formatDistanceToNow(new Date(str).getTime(), { addSuffix: true });
-  const handleSelectNoteMouseOver = (id) => isMouseDown && handleSelectNote(id);
+  const handleSelectNoteMouseOver = (note) => isMouseDown && handleSelectNote(note);
 
-  const handleDeleteNote = async (note) => {
-    await note.remove();
-    selectedNote.set({});
-    $omniText = '';
-    $omniMode = 'search';
-    $bodyText = '';
+  const handleDeleteNote = async (noteToDelete) => {
+    const database = await db();
+    await database.notes.findOne({ selector: { guid: noteToDelete.guid } }).remove();
+    notes = notes.filter((n) => n.guid !== noteToDelete.guid);
+    showContextMenu = false;
   };
 
   const handleSelectNote = (note) => {
@@ -53,64 +67,107 @@
     db$.notes
       .findOne({
         selector: {
-          name: $selectedNote.name,
+          name: note.name,
         },
       })
       .exec()
       .then((n) => {
-        omniMode.set('edit');
-        omniText.set(n?.name);
         bodyText.set(n?.body);
       });
   };
+
+  let selectedGuid = $derived($selectedNote?.guid);
+
+  $effect(() => {
+    const guid = selectedGuid;
+    if (!guid) return;
+    // Wait for list paint (e.g. after external selectNoteByGuid)
+    requestAnimationFrame(() => {
+      document
+        .querySelector(`#noteList [data-guid="${CSS.escape(guid)}"]`)
+        ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+  });
+
+  function handleContextMenu(event, note) {
+    event.preventDefault();
+    event.stopPropagation();
+    showContextMenu = true;
+    contextMenuNote = note;
+    contextMenuX = event.clientX;
+    contextMenuY = event.clientY;
+  }
+
+  function handleCloseContextMenu() {
+    showContextMenu = false;
+    contextMenuNote = null;
+  }
 </script>
 
-<!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <ul
   id="noteList"
-  on:mousedown={() => (isMouseDown = true)}
-  on:mouseup={() => (isMouseDown = false)}
+  class="thin-scrollbar flex-shrink-0 border-box"
+  onmousedown={() => (isMouseDown = true)}
+  onmouseup={() => (isMouseDown = false)}
   style="height: {$noteListHeight}px;"
 >
-  {#await noteList}
-    Loading Notes...
-  {:then results}
-    {#each results as note}
-      <!-- svelte-ignore a11y-mouse-events-have-key-events -->
-      <li
-        on:click={() => handleSelectNote(note)}
-        on:keydown={() => handleSelectNote(note)}
-        on:mouseover={() => handleSelectNoteMouseOver(note)}
-        style={$selectedNote === note && 'background: #2252a0; color: white;'}
+  {#each notes as note (note.guid)}
+    <!-- svelte-ignore a11y_mouse_events_have_key_events -->
+    <li
+      data-guid={note.guid}
+      class:selected={selectedGuid === note.guid}
+      onclick={() => handleSelectNote(note)}
+      onkeydown={() => handleSelectNote(note)}
+      onmouseover={() => handleSelectNoteMouseOver(note)}
+      style={selectedGuid === note.guid && 'background: #2252a0; color: white;'}
+    >
+      <span
+        class="elipsis"
+        role="button"
+        aria-label="Note Preview"
+        tabindex="-1"
+        ondblclick={() => {
+          const bodyEditor = document.getElementById('body-editor');
+          if (bodyEditor instanceof HTMLTextAreaElement) {
+            bodyEditor.focus();
+            const len = bodyEditor.value.length;
+            bodyEditor.setSelectionRange(len, len);
+          }
+        }}
       >
-        <span
-          class="elipsis"
-          role="button"
-          aria-label="Note Preview"
-          tabindex="-1"
-          on:dblclick={() => document.getElementById('body-editor').focus()}
-        >
-          {note.name}
-          {#if note.body !== ''}<span style="color: #505050">—</span>{/if}
-          <span class="mute" style={$selectedNote === note && 'color: #fff;'}>
-            {note.body ?? ''}
-          </span>
+        {note.name}
+        {#if note.body !== ''}<span style="color: #505050">—</span>{/if}
+        <span class="mute" style={selectedGuid === note.guid && 'color: #fff;'}>
+          {note.body ?? ''}
         </span>
+      </span>
 
-        <span class="meta flex items-center" style={$selectedNote === note && 'background: #2252a0; color: white;'}>
-          {formatDate(note.updatedAt)}
-          <button 
-            on:click={() => handleDeleteNote(note)} 
-            class="bg-transparent flex items-center" 
-            style="margin-left: 5px; color: {$selectedNote === note ? '#ffffff42' : '#7e848c66'};"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-trash-2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-          </button>
-        </span>
-      </li>
-    {/each}
-  {/await}
+      <span class="meta flex items-center truncate" style={selectedGuid === note.guid && 'background: #2252a0; color: white;'}>
+        {formatDate(note.updatedAt)}
+        <button
+          type="button"
+          aria-label="Note options"
+          onclick={(event) => handleContextMenu(event, note)}
+          class="bg-transparent flex items-center"
+          style="margin-left: 5px; color: {selectedGuid === note.guid ? '#ffffff42' : '#7e848c66'};"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-more-vertical"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
+        </button>
+      </span>
+    </li>
+  {/each}
 </ul>
+
+{#if showContextMenu}
+  <FileListItemContextMenu
+    note={contextMenuNote}
+    x={contextMenuX}
+    y={contextMenuY}
+    ondelete={handleDeleteNote}
+    onclose={() => (showContextMenu = false)}
+  />
+{/if}
 
 <style>
   ul {
@@ -120,7 +177,6 @@
     overflow-x: hidden;
     background-color: var(--app-omni-background);
     border-radius: 8px;
-    box-sizing: border-box;
   }
   li {
     display: flex;
@@ -142,7 +198,6 @@
   }
   .meta {
     color: #43484f;
-    white-space: nowrap;
     text-align: right;
     font-size: 13px;
   }

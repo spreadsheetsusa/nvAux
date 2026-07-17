@@ -41,5 +41,5 @@ export const schema = {
       "description": "text selection within note body (if any)"
     },
   },
-  required: ['name']
+  required: ['guid', 'name', 'createdAt', 'updatedAt']
 };

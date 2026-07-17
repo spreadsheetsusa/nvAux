@@ -23,18 +23,23 @@ html, body { margin: 0; padding: 0; font-family: Verdana, Geneva, Tahoma, sans-s
 .border-box { box-sizing: border-box; }
 .elipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 10px; }
 .flex { display: flex; }
+.flex-1 { flex: 1 1 0%; }
 .flex-col { flex-direction: column; }
 .flex-grow { flex-grow: 1; }
 .flex-grow-0 { flex-grow: 0; }
+.flex-shrink-0 { flex-shrink: 0; }
 .h-\[10px\] { height: 10px; }
 .h-full { height: 100%; }
 .h-screen {  height: 100dvh; }
 .hidden { display: none; }
+.inset-0 { inset: 0; }
 .items-center { align-items: center; }
 .justify-between { justify-content: space-between; }
 .justify-center { justify-content: center; }
 .justify-end { justify-content: flex-end; }
 .m-1\.5 { margin: 0.375rem; }
+.min-h-0 { min-height: 0; }
+.min-w-0 { min-width: 0; }
 .no-resize { resize: none; }
 .outline-none { outline: none; }
 .overflow-hidden { overflow: hidden; }
@@ -52,6 +57,7 @@ html, body { margin: 0; padding: 0; font-family: Verdana, Geneva, Tahoma, sans-s
 .p-2 { padding: 0.5rem; }
 .relative { position: relative; }
 .row-resize { cursor: row-resize; }
+.col-resize { cursor: col-resize; }
 .select-none { user-select: none; }
 .smooth-scroll { scroll-behavior: smooth; }
 .text-center { text-align: center; }
@@ -77,18 +83,36 @@ body {
 	color: var(--text-color);
 }
 
+body.is-panel-resizing {
+	cursor: inherit;
+	user-select: none;
+}
+
+body.is-panel-resizing * {
+	cursor: inherit !important;
+}
+
+body.is-panel-resizing .transition-all,
+body.is-panel-resizing .sidebar {
+	transition: none !important;
+}
+
 /* Light/Dark Mode Support */
 :root {
 	/* --background-color: white; */
 	/* --background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab); */
 	--text-color: black;
+	--app-accent: #ed0178;
 	--app-background: #eaeaea;
 	--app-omni-background: #d8d8d8;
 	--app-statusbar-background: #d1d1d1;
 	--app-statusbar-border: #c4c4c4;
+	--app-resizer-background: #c4c4c4;
 	--app-notedetail-background: #d9dde1;
 	--app-notelist-odd-background: #e9e9e9;
 	--app-notelist-even-background: #e3e3e3;
+	--scrollbar-thumb: rgba(60, 60, 60, 0.28);
+	--scrollbar-thumb-hover: rgba(60, 60, 60, 0.45);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -105,6 +129,8 @@ body {
 		--app-notelist-odd-background: #222426;
 		--app-notelist-even-background: #2c2e31;
 		--app-resizer-background: #181a1c;
+		--scrollbar-thumb: rgba(255, 255, 255, 0.22);
+		--scrollbar-thumb-hover: rgba(255, 255, 255, 0.38);
 	}
 
 	body {
@@ -123,5 +149,223 @@ body {
 	}
 	100% {
 		background-position: 0% 50%;
+	}
+}
+
+@keyframes pulse {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.45;
+	}
+}
+
+.anim-pulse {
+	animation: pulse 1.5s ease-in-out infinite;
+}
+.transition-colors {
+  transition-property: color;
+  transition-duration: 300ms;
+  transition-timing-function: ease;
+}
+.outline-none { outline: none; }
+
+/* Minimal scrollbars: Firefox + WebKit/Blink */
+.thin-scrollbar {
+	scrollbar-width: thin;
+	scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+.thin-scrollbar::-webkit-scrollbar {
+	width: 6px;
+	height: 6px;
+}
+
+.thin-scrollbar::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.thin-scrollbar::-webkit-scrollbar-thumb {
+	background-color: var(--scrollbar-thumb);
+	border-radius: 999px;
+	border: 1px solid transparent;
+	background-clip: padding-box;
+}
+
+.thin-scrollbar::-webkit-scrollbar-thumb:hover {
+	background-color: var(--scrollbar-thumb-hover);
+}
+
+.thin-scrollbar::-webkit-scrollbar-corner {
+	background: transparent;
+}
+
+/* Life Calendar week zoom — View Transitions (sidebar-scoped) */
+@supports (view-transition-name: none) {
+	::view-transition-group(life-year),
+	::view-transition-group(life-week) {
+		animation-duration: 500ms;
+		animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+	}
+
+	::view-transition-group(life-pane),
+	::view-transition-group(life-scope) {
+		animation-duration: 420ms;
+		animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+	}
+
+	/*
+	 * Document-scoped fallback: never crossfade the whole viewport.
+	 * Only the calendar's life-scope group gets the zoom feel.
+	 */
+	html[data-life-vt='document'][data-life-nav]::view-transition-old(root),
+	html[data-life-vt='document'][data-life-nav]::view-transition-new(root) {
+		animation: none;
+		mix-blend-mode: normal;
+		opacity: 1;
+	}
+
+	/* Element-scoped VT: root === .life-calendar */
+	html[data-life-vt='scoped'][data-life-nav='forward']::view-transition-old(root),
+	html[data-life-vt='document'][data-life-nav='forward']::view-transition-old(life-scope) {
+		animation: life-vt-recede 500ms cubic-bezier(0.32, 0.72, 0, 1) both;
+	}
+
+	html[data-life-vt='scoped'][data-life-nav='forward']::view-transition-new(root),
+	html[data-life-vt='document'][data-life-nav='forward']::view-transition-new(life-scope) {
+		animation: life-vt-arrive 500ms cubic-bezier(0.32, 0.72, 0, 1) both;
+	}
+
+	html[data-life-vt='scoped'][data-life-nav='back']::view-transition-old(root),
+	html[data-life-vt='document'][data-life-nav='back']::view-transition-old(life-scope) {
+		animation: life-vt-arrive 500ms cubic-bezier(0.32, 0.72, 0, 1) reverse both;
+	}
+
+	html[data-life-vt='scoped'][data-life-nav='back']::view-transition-new(root),
+	html[data-life-vt='document'][data-life-nav='back']::view-transition-new(life-scope) {
+		animation: life-vt-recede 500ms cubic-bezier(0.32, 0.72, 0, 1) reverse both;
+	}
+
+	/* —— In-week hops: directional slide, no root/scope overlap —— */
+	html[data-life-nav^='week']::view-transition-group(life-week) {
+		animation-duration: 300ms;
+		animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+	}
+
+	html[data-life-vt='scoped'][data-life-nav^='week']::view-transition-old(root),
+	html[data-life-vt='scoped'][data-life-nav^='week']::view-transition-new(root),
+	html[data-life-vt='document'][data-life-nav^='week']::view-transition-old(life-scope),
+	html[data-life-vt='document'][data-life-nav^='week']::view-transition-new(life-scope),
+	html[data-life-nav^='week']::view-transition-group(life-year) {
+		animation: none;
+		mix-blend-mode: normal;
+	}
+
+	html[data-life-nav^='week']::view-transition-group(life-pane) {
+		animation: none;
+		overflow: clip;
+	}
+
+	html[data-life-nav^='week']::view-transition-image-pair(life-pane) {
+		isolation: isolate;
+	}
+
+	html[data-life-nav^='week']::view-transition-old(life-pane),
+	html[data-life-nav^='week']::view-transition-new(life-pane) {
+		mix-blend-mode: normal;
+		height: 100%;
+		overflow: clip;
+	}
+
+	/* Later week → forward in time: exit left, enter from right */
+	html[data-life-nav='week-fwd']::view-transition-old(life-pane) {
+		animation: life-vt-slide-out-left 320ms cubic-bezier(0.32, 0.72, 0, 1) both;
+	}
+
+	html[data-life-nav='week-fwd']::view-transition-new(life-pane) {
+		animation: life-vt-slide-in-right 320ms cubic-bezier(0.32, 0.72, 0, 1) both;
+	}
+
+	/* Earlier week → back in time: exit right, enter from left */
+	html[data-life-nav='week-back']::view-transition-old(life-pane) {
+		animation: life-vt-slide-out-right 320ms cubic-bezier(0.32, 0.72, 0, 1) both;
+	}
+
+	html[data-life-nav='week-back']::view-transition-new(life-pane) {
+		animation: life-vt-slide-in-left 320ms cubic-bezier(0.32, 0.72, 0, 1) both;
+	}
+
+	::view-transition-old(life-pane),
+	::view-transition-new(life-pane) {
+		animation-duration: 420ms;
+		animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+	}
+}
+
+@keyframes life-vt-recede {
+	from {
+		opacity: 1;
+		transform: scale(1);
+	}
+	to {
+		opacity: 0;
+		transform: scale(0.96);
+	}
+}
+
+@keyframes life-vt-arrive {
+	from {
+		opacity: 0;
+		transform: scale(1.04);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+
+@keyframes life-vt-slide-out-left {
+	from {
+		opacity: 1;
+		transform: translateX(0);
+	}
+	to {
+		opacity: 0;
+		transform: translateX(-22%);
+	}
+}
+
+@keyframes life-vt-slide-in-right {
+	from {
+		opacity: 0;
+		transform: translateX(22%);
+	}
+	to {
+		opacity: 1;
+		transform: translateX(0);
+	}
+}
+
+@keyframes life-vt-slide-out-right {
+	from {
+		opacity: 1;
+		transform: translateX(0);
+	}
+	to {
+		opacity: 0;
+		transform: translateX(22%);
+	}
+}
+
+@keyframes life-vt-slide-in-left {
+	from {
+		opacity: 0;
+		transform: translateX(-22%);
+	}
+	to {
+		opacity: 1;
+		transform: translateX(0);
 	}
 }

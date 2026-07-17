@@ -1,9 +1,7 @@
 import { writable } from 'svelte/store';
-import { v4 as uuidv4 } from 'uuid';
 
 import { addRxPlugin, createRxDatabase } from 'rxdb';
 import { getRxStorageDexie } from 'rxdb/plugins/storage-dexie';
-import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode';
 
 import { schema } from './schema';
 
@@ -12,23 +10,83 @@ import { schema } from './schema';
  */
 
 const storedNoteListHeight = localStorage.getItem('noteListHeight') || 220;
-const storedFullScreen = JSON.parse(localStorage.getItem('fullScreen')) || false;
-const storedMaximumFullScreen = JSON.parse(localStorage.getItem('maximumFullScreen')) || true;
+const storedSidebarWidth = localStorage.getItem('sidebarWidth') || 443;
+
+/** @param {string} key @param {boolean} fallback */
+function readStoredBool(key, fallback) {
+  const raw = localStorage.getItem(key);
+  if (raw === null) return fallback;
+  try {
+    return !!JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+
+const storedFullScreen = readStoredBool('fullScreen', false);
+/** Windowed app mode; migrated from inverted legacy `maximumFullScreen`. */
+const storedWindowed = (() => {
+  const raw = localStorage.getItem('windowed');
+  if (raw !== null) return readStoredBool('windowed', false);
+  const legacy = localStorage.getItem('maximumFullScreen');
+  if (legacy !== null) {
+    try {
+      return !JSON.parse(legacy);
+    } catch {
+      return false;
+    }
+  }
+  return false;
+})();
 const storedShowClock = JSON.parse(localStorage.getItem('showClock')) || "true";
+const storedSidebarOpen = readStoredBool('sidebarOpen', false);
+const storedBirthDate = localStorage.getItem('birthDate') || '1982-05-24';
+const storedExpectedLongevity = localStorage.getItem('expectedLongevity') || '80';
+const LIFE_CALENDAR_STATS = [
+  'title',
+  'yearsOld',
+  'percentLived',
+  'yearsLived',
+  'percentRemaining',
+  'yearsRemaining',
+];
+const LIFE_CALENDAR_STAT_PREF_VERSION = '2';
+if (localStorage.getItem('lifeCalendarStatPrefVersion') !== LIFE_CALENDAR_STAT_PREF_VERSION) {
+  localStorage.setItem('lifeCalendarStat', 'title');
+  localStorage.setItem('lifeCalendarStatPrefVersion', LIFE_CALENDAR_STAT_PREF_VERSION);
+}
+const storedLifeCalendarStat = LIFE_CALENDAR_STATS.includes(localStorage.getItem('lifeCalendarStat'))
+  ? localStorage.getItem('lifeCalendarStat')
+  : 'title';
 
 /**
  * RxDB ************************************************************************
  */
 
-addRxPlugin(RxDBDevModePlugin);
+/** Bumped with RxDB 17 schema (indexed fields must be required). */
+const DB_NAME = 'nvauxdb17';
 
 let dbPromise;
 
 const _create = async () => {
+  const isDev = import.meta.env.DEV;
+
+  if (isDev) {
+    const { RxDBDevModePlugin } = await import('rxdb/plugins/dev-mode');
+    addRxPlugin(RxDBDevModePlugin);
+  }
+
+  const baseStorage = getRxStorageDexie();
+  const storage = isDev
+    ? (await import('rxdb/plugins/validate-ajv')).wrappedValidateAjvStorage({
+        storage: baseStorage,
+      })
+    : baseStorage;
+
   const db = await createRxDatabase({
-    name: 'nvauxdb',
-    storage: getRxStorageDexie(),
-    ignoreDuplicate: true
+    name: DB_NAME,
+    storage,
+    ignoreDuplicate: isDev,
   });
 
   await db.addCollections({ notes: { schema } });
@@ -73,13 +131,6 @@ Don't forget to follow the project on 𝕏 at @nvAuxApp and let us know what you
       createdAt: new Date().getTime(),
       updatedAt: new Date().getTime()
     });
-    // await db.notes.insert({
-    //   guid: '00000000-0000-0000-0000-111111111111',
-    //   name: 'Sketch Pad Demo',
-    //   body: 'Use this demo note to test out the sketch pad feature.',
-    //   createdAt: new Date().getTime(),
-    //   updatedAt: new Date().getTime()
-    // });
   };
 
 
@@ -96,13 +147,38 @@ export const db = () => dbPromise ? dbPromise : _create();
 export const omniMode = writable('search');
 export const omniText = writable('');
 export const noteList = writable([]);
-export const noteListHeight = writable(storedNoteListHeight);
+export const noteListHeight = writable(Number(storedNoteListHeight));
+export const sidebarWidth = writable(Number(storedSidebarWidth));
 export const selectedNote = writable({});
 export const bodyText = writable('');
+export const markdownPreview = writable(false);
 export const fullScreen = writable(storedFullScreen);
-export const maximumFullScreen = writable(storedMaximumFullScreen);
+/** App Mode floating window (vs edge-to-edge fullscreen). */
+export const windowed = writable(storedWindowed);
 export const showClock = writable(storedShowClock);
+export const sidebarOpen = writable(storedSidebarOpen);
+export const birthDate = writable(storedBirthDate);
+export const expectedLongevity = writable(storedExpectedLongevity);
+export const lifeCalendarStat = writable(storedLifeCalendarStat);
+export const LIFE_CALENDAR_STAT_MODES = LIFE_CALENDAR_STATS;
+/** Height of the media player bar above the StatusBar (0 when hidden). */
+export const mediaPlayerHeight = writable(0);
 
+/**
+ * Open a note by guid in NoteDetail and select it in the list.
+ * Does not alter omniText / filter mode.
+ * @param {string} guid
+ * @returns {Promise<object | null>}
+ */
+export async function selectNoteByGuid(guid) {
+  if (!guid) return null;
+  const database = await db();
+  const note = await database.notes.findOne(guid).exec();
+  if (!note) return null;
+  selectedNote.set(note);
+  bodyText.set(note.body ?? '');
+  return note;
+}
 
 omniText.subscribe(v => {
   if (v === '') {
@@ -113,7 +189,12 @@ omniText.subscribe(v => {
 });
 
 noteListHeight.subscribe(v => localStorage.setItem('noteListHeight', v.toString()));
+sidebarWidth.subscribe(v => localStorage.setItem('sidebarWidth', v.toString()));
 
-fullScreen.subscribe(v => localStorage.setItem('fullScreen', v));
-maximumFullScreen.subscribe(v => localStorage.setItem('maximumFullScreen', v));
+fullScreen.subscribe(v => localStorage.setItem('fullScreen', JSON.stringify(v)));
+windowed.subscribe(v => localStorage.setItem('windowed', JSON.stringify(v)));
 showClock.subscribe(v => localStorage.setItem('showClock', v));
+sidebarOpen.subscribe(v => localStorage.setItem('sidebarOpen', JSON.stringify(v)));
+birthDate.subscribe(v => localStorage.setItem('birthDate', v));
+expectedLongevity.subscribe(v => localStorage.setItem('expectedLongevity', v));
+lifeCalendarStat.subscribe(v => localStorage.setItem('lifeCalendarStat', v));

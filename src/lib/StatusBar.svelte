@@ -1,45 +1,68 @@
 <script>
-  import { onMount } from 'svelte';
-  import { format } from 'date-fns';
-  import { fullScreen, showClock } from './store';
+  import { fullScreen, windowed, selectedNote, markdownPreview } from './store';
+  import { isEmptyObject } from '../utils/isEmptyObject';
 
-  let time = new Date();
+  const SETTINGS_GUID = '00000000-0000-0000-0000-000000000000';
 
-  onMount(() => {
-    const interval = setInterval(() => {
-      time = new Date();
-    }, 1000);
+  let canPreview = $derived(
+    !!$selectedNote &&
+      !isEmptyObject($selectedNote) &&
+      $selectedNote.guid !== SETTINGS_GUID
+  );
 
-    return () => {
-      clearInterval(interval);
-    };
+  $effect(() => {
+    if (!canPreview && $markdownPreview) {
+      markdownPreview.set(false);
+    }
   });
+
+  function togglePreview() {
+    markdownPreview.update((v) => !v);
+  }
 </script>
 
 <div
   class="status-bar px-2 items-center flex absolute w-full flex-grow-0 transition-all"
-  style="font-size: 12px;  background: var(--app-statusbar-background); bottom: 0; left: 0; color: #606060; border-top: 1px solid var(--app-statusbar-border); height: {$fullScreen ? '45px' : '34px'};"
+  style="font-size: 12px;  background: var(--app-statusbar-background); bottom: 0; left: 0; color: #606060; border-top: 1px solid var(--app-statusbar-border); height: {$fullScreen && !$windowed ? '45px' : '34px'};"
 >
-  <div class="flex-grow flex items-center">nvAux v0.1.5-20240906-005</div>
-  <div>
-    <button on:click={() => $fullScreen = !$fullScreen} style="margin-right: 10px; color: {!$fullScreen ? '#ed0178' : '#818181'}" class="bg-transparent flex items-center outline-none transition-all">
-      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-minimize">
-        {#if $fullScreen}
-          <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"></path>
-        {:else}
-          <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
-        {/if}
-      </svg>
+  <div class="flex-grow flex items-center">nvAux v0.1.7-20260716-001</div>
+  {#if canPreview}
+    <button
+      type="button"
+      class="preview-toggle flex-shrink-0"
+      class:active={$markdownPreview}
+      onclick={togglePreview}
+    >
+      {$markdownPreview ? 'Edit' : 'Preview'}
     </button>
-  </div>
-  {#if $showClock}
-    <div class="flex items-center">{format(time, 'hh:mm:ss a')}</div>
   {/if}
 </div>
 
-
 <style>
- @media screen and (max-width: 768px) {
+  .preview-toggle {
+    margin-left: 8px;
+    padding: 2px 8px;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    background: transparent;
+    color: #606060;
+    font-size: 12px;
+    line-height: 1.2;
+    cursor: pointer;
+  }
+
+  .preview-toggle:hover {
+    color: #8a8a8a;
+    border-color: #404040;
+  }
+
+  .preview-toggle.active {
+    color: rgba(255, 255, 255, 0.85);
+    border-color: #525962;
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  @media screen and (max-width: 768px) {
     .status-bar {
       align-items: start;
       padding-top: 10px;
