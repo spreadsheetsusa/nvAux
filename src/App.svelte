@@ -100,6 +100,7 @@
       bind:this={mainContent}
     >
       <OmniBar />
+      <AudioPlayer />
       <NoteList />
       <ResizeHandle
         orientation="vertical"
@@ -109,7 +110,6 @@
         ariaLabel="Resize note list"
       />
       <NoteDetail />
-      <AudioPlayer />
       <StatusBar />
     </div>
   </main>

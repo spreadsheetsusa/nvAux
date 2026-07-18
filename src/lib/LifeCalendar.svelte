@@ -2,6 +2,7 @@
   import { onMount, tick } from 'svelte';
   import { addYears, addDays, differenceInDays, format, startOfDay } from 'date-fns';
   import IconChevronLeft from './IconChevronLeft.svelte';
+  import WeekNoteChart from './WeekNoteChart.svelte';
   import {
     birthDate,
     db,
@@ -234,6 +235,15 @@
   let isViewingToday = $derived(
     !!selected && !!currentWeekMeta && selected.index === currentWeekMeta.index,
   );
+
+  let yearWeekCounts = $derived.by(() => {
+    const year = selectedYear;
+    if (!year) return [];
+    const map = notesByWeek;
+    return year.weeks.map((week) =>
+      week.status === 'absent' ? 0 : (map.get(week.index)?.length ?? 0),
+    );
+  });
 
   let weekHeights = $derived.by(() => {
     const map = notesByWeek;
@@ -558,7 +568,7 @@
   {#if !inWeekView}
     <button
       type="button"
-      class="life-calendar-title flex-shrink-0 w-full"
+      class="life-calendar-title flex-shrink-0 w-full select-none"
       title="Click to change stat"
       onclick={cycleTitleStat}
     >
@@ -645,6 +655,7 @@
             </button>
           {/if}
         </div>
+        <WeekNoteChart counts={yearWeekCounts} maxWeeks={maxWeeks} />
         <div
           class="life-year-row week-year-strip flex items-center min-w-0"
           class:vt-year={vtAge === selectedYear.age}

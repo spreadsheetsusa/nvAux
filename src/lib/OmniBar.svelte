@@ -124,7 +124,7 @@
   </div>
   <div class="tray flex items-center flex-shrink-0" style="padding-right: 10px;">
     {#if $showClock}
-      <div class="clock flex items-center" style="font-size: 12px; margin-right: 10px; color: #88959f;">{format(time, 'hh:mm:ss a')}</div>
+      <div class="clock flex items-center select-none" style="font-size: 12px; margin-right: 10px; color: #88959f;">{format(time, 'hh:mm:ss a')}</div>
     {/if}
     <button
       type="button"
