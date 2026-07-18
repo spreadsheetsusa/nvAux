@@ -6,6 +6,7 @@
  * type: kanban
  * sticky: true
  * color: yellow
+ * locked: true
  * theme:
  *   accent: "#ed0178"
  *   density: comfortable
@@ -22,6 +23,7 @@ export const STICKY_COLORS = /** @type {const} */ (['yellow', 'pink', 'blue']);
  *   type?: string,
  *   sticky?: boolean,
  *   color?: StickyColor,
+ *   locked?: boolean,
  *   theme?: { accent?: string, density?: string },
  *   bodyWithoutMeta: string,
  *   hasMeta: boolean
@@ -95,10 +97,10 @@ export function parseNoteMeta(body) {
 
 /**
  * @param {string} fm
- * @returns {{ type?: string, sticky?: boolean, color?: StickyColor, theme?: { accent?: string, density?: string } }}
+ * @returns {{ type?: string, sticky?: boolean, color?: StickyColor, locked?: boolean, theme?: { accent?: string, density?: string } }}
  */
 function parseFrontmatterBlock(fm) {
-  /** @type {{ type?: string, sticky?: boolean, color?: StickyColor, theme?: { accent?: string, density?: string } }} */
+  /** @type {{ type?: string, sticky?: boolean, color?: StickyColor, locked?: boolean, theme?: { accent?: string, density?: string } }} */
   const meta = {};
   let inTheme = false;
 
@@ -137,6 +139,9 @@ function parseFrontmatterBlock(fm) {
     } else if (key === 'sticky') {
       const b = parseBool(value);
       if (b !== undefined) meta.sticky = b;
+    } else if (key === 'locked') {
+      const b = parseBool(value);
+      if (b !== undefined) meta.locked = b;
     } else if (key === 'color') {
       const c = normalizeStickyColor(value);
       if (c) meta.color = c;
@@ -155,6 +160,7 @@ function parseFrontmatterBlock(fm) {
  *   type?: string,
  *   sticky?: boolean,
  *   color?: StickyColor,
+ *   locked?: boolean,
  *   theme?: { accent?: string, density?: string },
  * }} meta
  * @param {string} bodyContent
@@ -167,6 +173,7 @@ export function serializeNoteMeta(meta, bodyContent) {
   if (meta.sticky === true && meta.color) {
     lines.push(`color: ${meta.color}`);
   }
+  if (meta.locked === true) lines.push('locked: true');
   const theme = meta.theme;
   if (theme && (theme.accent || theme.density)) {
     lines.push('theme:');
@@ -179,7 +186,38 @@ export function serializeNoteMeta(meta, bodyContent) {
 }
 
 /**
- * Merge sticky fields into an existing note body (preserves type/theme/content).
+ * @param {ReturnType<typeof parseNoteMeta>} parsed
+ * @returns {{ type?: string, sticky?: boolean, color?: StickyColor, locked?: boolean, theme?: { accent?: string, density?: string } }}
+ */
+function baseMetaFromParsed(parsed) {
+  /** @type {{ type?: string, sticky?: boolean, color?: StickyColor, locked?: boolean, theme?: { accent?: string, density?: string } }} */
+  const meta = {};
+  if (parsed.type) meta.type = parsed.type;
+  if (parsed.theme && (parsed.theme.accent || parsed.theme.density)) {
+    meta.theme = { ...parsed.theme };
+  }
+  if (parsed.sticky === true) {
+    meta.sticky = true;
+    meta.color = normalizeStickyColor(parsed.color ?? 'yellow') ?? 'yellow';
+  }
+  if (parsed.locked === true) meta.locked = true;
+  return meta;
+}
+
+/**
+ * @param {{ type?: string, sticky?: boolean, color?: StickyColor, locked?: boolean, theme?: { accent?: string, density?: string } }} meta
+ */
+function metaHasKeys(meta) {
+  return (
+    !!meta.type ||
+    meta.sticky === true ||
+    meta.locked === true ||
+    !!(meta.theme && (meta.theme.accent || meta.theme.density))
+  );
+}
+
+/**
+ * Merge sticky fields into an existing note body (preserves type/theme/locked/content).
  * When sticky is false, sticky/color keys are removed; if no other meta remains,
  * frontmatter is dropped entirely.
  * @param {string | null | undefined} body
@@ -189,25 +227,35 @@ export function serializeNoteMeta(meta, bodyContent) {
 export function applyStickyMeta(body, patch) {
   const parsed = parseNoteMeta(body ?? '');
   const content = parsed.bodyWithoutMeta;
-
-  /** @type {{ type?: string, sticky?: boolean, color?: StickyColor, theme?: { accent?: string, density?: string } }} */
-  const meta = {};
-  if (parsed.type) meta.type = parsed.type;
-  if (parsed.theme && (parsed.theme.accent || parsed.theme.density)) {
-    meta.theme = { ...parsed.theme };
-  }
+  const meta = baseMetaFromParsed(parsed);
 
   if (patch.sticky) {
     meta.sticky = true;
     meta.color = normalizeStickyColor(patch.color ?? parsed.color ?? 'yellow') ?? 'yellow';
+  } else {
+    delete meta.sticky;
+    delete meta.color;
   }
 
-  const hasMeta =
-    !!meta.type ||
-    meta.sticky === true ||
-    !!(meta.theme && (meta.theme.accent || meta.theme.density));
+  if (!metaHasKeys(meta)) return content;
+  return serializeNoteMeta(meta, content);
+}
 
-  if (!hasMeta) return content;
+/**
+ * Merge locked flag into an existing note body (preserves type/sticky/theme/content).
+ * @param {string | null | undefined} body
+ * @param {boolean} locked
+ * @returns {string}
+ */
+export function applyLockedMeta(body, locked) {
+  const parsed = parseNoteMeta(body ?? '');
+  const content = parsed.bodyWithoutMeta;
+  const meta = baseMetaFromParsed(parsed);
+
+  if (locked) meta.locked = true;
+  else delete meta.locked;
+
+  if (!metaHasKeys(meta)) return content;
   return serializeNoteMeta(meta, content);
 }
 
@@ -217,6 +265,14 @@ export function applyStickyMeta(body, patch) {
  */
 export function isNoteSticky(body) {
   return parseNoteMeta(body ?? '').sticky === true;
+}
+
+/**
+ * @param {string | null | undefined} body
+ * @returns {boolean}
+ */
+export function isNoteLocked(body) {
+  return parseNoteMeta(body ?? '').locked === true;
 }
 
 /**

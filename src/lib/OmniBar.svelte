@@ -3,9 +3,7 @@
   import { format } from 'date-fns';
   import { v4 as uuidv4 } from 'uuid';
 
-  import IconXcircle from './IconXcircle.svelte';
-  import IconSidebar from './IconSidebar.svelte';
-  import IconSettings from './IconSettings.svelte';
+  import Icon from '$lib/components/Icon.svelte';
 
   import {
     omniMode,
@@ -116,7 +114,7 @@
     class="bg-transparent flex items-center px-2 leading-none outline-none"
     onclick={() => ($sidebarOpen = !$sidebarOpen)}
   >
-    <IconSidebar />
+    <Icon name="Sidebar" />
   </button>
   <div class="input-wrapper flex-grow flex items-center">
     <input
@@ -140,7 +138,7 @@
           document.getElementById('omni-input').focus();
         }}
       >
-        <IconXcircle />
+        <Icon name="Xcircle" />
       </button>
     {/if}
   </div>
@@ -155,7 +153,7 @@
       style="margin-right: 8px;"
       onclick={openSettings}
     >
-      <IconSettings />
+      <Icon name="Settings" />
     </button>
     <button
       type="button"

@@ -30,6 +30,8 @@
     updateNotePopupRect,
     openNoteByName,
     syncMarkdownPreviewForNoteType,
+    unlockedNoteActivity,
+    touchNoteActivity,
   } from './store';
   import { popupFrame } from '../utils/popupFrame';
   import { debounce } from '../utils/debounce';
@@ -39,6 +41,8 @@
   } from '../utils/wikiLinks';
   import Settings from './Settings.svelte';
   import NoteToolbar from './NoteToolbar.svelte';
+  import NoteUnlockPanel from './NoteUnlockPanel.svelte';
+  import { isNoteLocked } from './noteTypes/parseNoteMeta';
   import { resolveNoteType } from './noteTypes/resolveNoteType';
   import KanbanBoard from './noteTypes/kanban/KanbanBoard.svelte';
 
@@ -100,6 +104,12 @@
   };
 
   let isSettings = $derived(guid === SETTINGS_GUID);
+  let contentLocked = $derived(
+    !isSettings &&
+      !missing &&
+      isNoteLocked(localBody) &&
+      $unlockedNoteActivity[guid] == null
+  );
   let showPreview = $derived(!isSettings && !missing && $markdownPreview);
   let noteType = $derived(resolveNoteType(noteDoc ?? { guid }, localBody));
   let showMarkdownPreview = $derived(showPreview && noteType === 'markdown');
@@ -195,6 +205,15 @@
     const title = parseWikiHref(anchor.getAttribute('href'));
     if (title) openNoteByName(title);
   }
+
+  function markNoteActivity() {
+    touchNoteActivity(guid);
+  }
+
+  function handlePopupPointerDown() {
+    handleRaise();
+    markNoteActivity();
+  }
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -203,7 +222,8 @@
   class="note-popup"
   use:popupFrame={{ left, top, width, height, onFrame: handleFrame }}
   style:z-index={zIndex}
-  onpointerdown={handleRaise}
+  onpointerdown={handlePopupPointerDown}
+  onkeydown={markNoteActivity}
 >
   <div class="popup-titlebar flex items-center justify-between">
     <span class="popup-title truncate">{noteName || 'Note'}</span>
@@ -228,7 +248,9 @@
       </div>
     {:else}
       <NoteToolbar note={noteDoc} body={localBody} />
-      {#if showKanban}
+      {#if contentLocked}
+        <NoteUnlockPanel {guid} />
+      {:else if showKanban}
         <KanbanBoard body={localBody} onChange={handleKanbanChange} />
       {:else if showMarkdownPreview}
         <!-- svelte-ignore a11y_click_events_have_key_events -->

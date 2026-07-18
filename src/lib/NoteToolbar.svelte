@@ -6,7 +6,14 @@
     bodyText,
     markdownPreview,
     setNoteSticky,
+    setNoteLocked,
     toggleMarkdownPreviewForNoteType,
+    isLockPinSet,
+    verifyLockPin,
+    promptSettingsForLockPin,
+    unlockNoteSession,
+    lockNoteSession,
+    unlockedNoteActivity,
   } from './store';
   import { isEmptyObject } from '../utils/isEmptyObject';
   import {
@@ -16,12 +23,12 @@
     mediaPlayNow,
     hasQueueableMedia,
   } from './mediaSession';
-  import { isNoteSticky } from './noteTypes/parseNoteMeta';
+  import { isNoteLocked, isNoteSticky } from './noteTypes/parseNoteMeta';
   import { resolveNoteType } from './noteTypes/resolveNoteType';
-  import IconCalendarTime from './IconCalendarTime.svelte';
-  import IconSticky from './IconSticky.svelte';
+  import Icon from '$lib/components/Icon.svelte';
 
   const createdAtSlide = { axis: 'x', duration: 180 };
+  const pinSlide = { axis: 'x', duration: 180 };
 
   const SETTINGS_GUID = '00000000-0000-0000-0000-000000000000';
 
@@ -45,6 +52,10 @@
   );
   let canSticky = $derived(canPreview && noteType === 'markdown');
   let stickyOn = $derived(canSticky && isNoteSticky(activeBody));
+  let lockedOn = $derived(canPreview && isNoteLocked(activeBody));
+  let sessionUnlocked = $derived(
+    !!activeNote?.guid && $unlockedNoteActivity[activeNote.guid] != null
+  );
 
   let hasMedia = $derived(canPreview && hasQueueableMedia(activeBody));
 
@@ -58,6 +69,13 @@
   let editingCreatedAt = $derived(
     editingGuid != null && editingGuid === activeNote?.guid
   );
+
+  /** @type {null | 'lock' | 'relock' | 'unlock' | 'remove'} */
+  let pinMode = $state(null);
+  let pinGuid = $state(null);
+  let pinDraft = $state('');
+  let pinError = $state('');
+  let pinEditing = $derived(pinGuid != null && pinGuid === activeNote?.guid && pinMode != null);
 
   function togglePreview() {
     toggleMarkdownPreviewForNoteType(noteType);
@@ -75,6 +93,7 @@
     const ts = activeNote?.createdAt;
     const guid = activeNote?.guid;
     if (ts == null || !guid) return;
+    cancelPinEditor();
     draftDate = format(ts, 'yyyy-MM-dd');
     editingGuid = guid;
   }
@@ -92,11 +111,86 @@
     }
   }
 
+  function cancelPinEditor() {
+    pinMode = null;
+    pinGuid = null;
+    pinDraft = '';
+    pinError = '';
+  }
+
+  function attachResetPinEditor() {
+    if (pinGuid != null) cancelPinEditor();
+  }
+
+  function openPinEditor(mode) {
+    const guid = activeNote?.guid;
+    if (!guid) return;
+    cancelCreatedAtEditor();
+    pinMode = mode;
+    pinGuid = guid;
+    pinDraft = '';
+    pinError = '';
+  }
+
+  async function onLockClick() {
+    if (!activeNote || !canPreview) return;
+    if (!isLockPinSet()) {
+      await promptSettingsForLockPin();
+      return;
+    }
+    if (!lockedOn) {
+      openPinEditor('lock');
+      return;
+    }
+    if (sessionUnlocked) {
+      openPinEditor('relock');
+      return;
+    }
+    openPinEditor('unlock');
+  }
+
+  async function submitPin() {
+    if (!activeNote || !pinMode) return;
+    if (!verifyLockPin(pinDraft)) {
+      pinError = 'Incorrect PIN';
+      return;
+    }
+    const guid = activeNote.guid;
+    if (pinMode === 'lock') {
+      await setNoteLocked(activeNote, true);
+    } else if (pinMode === 'relock') {
+      lockNoteSession(guid);
+    } else if (pinMode === 'unlock') {
+      unlockNoteSession(guid);
+    } else if (pinMode === 'remove') {
+      await setNoteLocked(activeNote, false);
+    }
+    cancelPinEditor();
+  }
+
+  function onPinInput(event) {
+    pinDraft = String(event.currentTarget.value || '')
+      .replace(/\D/g, '')
+      .slice(0, 6);
+    pinError = '';
+  }
+
   function handleCreatedAtKeydown(event) {
-    if (!editingCreatedAt) return;
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      cancelCreatedAtEditor();
+    if (editingCreatedAt) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        cancelCreatedAtEditor();
+      }
+      return;
+    }
+    if (pinEditing) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        cancelPinEditor();
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+        submitPin();
+      }
     }
   }
 
@@ -126,6 +220,16 @@
 
     cancelCreatedAtEditor();
   }
+
+  let pinActionLabel = $derived(
+    pinMode === 'lock'
+      ? 'Lock'
+      : pinMode === 'relock'
+        ? 'Lock now'
+        : pinMode === 'remove'
+          ? 'Remove'
+          : 'Unlock'
+  );
 </script>
 
 <svelte:window onkeydown={handleCreatedAtKeydown} />
@@ -207,7 +311,70 @@
             {@attach attachResetCreatedAtEditor}
             transition:slide={createdAtSlide}
           >
-            <IconCalendarTime class="calendar-time-icon" />
+            <Icon name="CalendarTime" class="calendar-time-icon" />
+          </button>
+        {/if}
+      {/key}
+      {#key activeNote?.guid}
+        {#if pinEditing}
+          <div class="pin-editor flex items-center flex-shrink-0" transition:slide={pinSlide}>
+            <input
+              class="pin-input"
+              type="password"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              maxlength="6"
+              placeholder="PIN"
+              aria-label="Lock PIN"
+              value={pinDraft}
+              oninput={onPinInput}
+            />
+            <button type="button" class="toolbar-btn" onclick={cancelPinEditor}>Cancel</button>
+            {#if lockedOn && sessionUnlocked && (pinMode === 'relock' || pinMode === 'remove')}
+              <button
+                type="button"
+                class="toolbar-btn"
+                onclick={() => {
+                  pinMode = 'remove';
+                  pinError = '';
+                  if (pinDraft.length === 6) submitPin();
+                }}
+              >
+                Remove lock
+              </button>
+            {/if}
+            <button
+              type="button"
+              class="toolbar-btn accent"
+              onclick={submitPin}
+              disabled={pinDraft.length !== 6}
+            >
+              {pinActionLabel}
+            </button>
+            {#if pinError}
+              <span class="pin-error">{pinError}</span>
+            {/if}
+          </div>
+        {:else}
+          <button
+            type="button"
+            class="toolbar-btn flex-shrink-0 icon-btn"
+            class:active={lockedOn}
+            aria-label={lockedOn
+              ? sessionUnlocked
+                ? 'Lock note again'
+                : 'Unlock note'
+              : 'Lock note'}
+            title={lockedOn
+              ? sessionUnlocked
+                ? 'Lock again (PIN)'
+                : 'Unlock with PIN'
+              : 'Lock note with PIN'}
+            onclick={onLockClick}
+            {@attach attachResetPinEditor}
+            transition:slide={pinSlide}
+          >
+            <Icon name="Lock" class="lock-icon" />
           </button>
         {/if}
       {/key}
@@ -222,7 +389,7 @@
             : 'Pin as sticky note in Windowed mode'}
           onclick={toggleSticky}
         >
-          <IconSticky class="sticky-icon" />
+          <Icon name="Sticky" class="sticky-icon" />
         </button>
       {/if}
       <button
@@ -254,11 +421,13 @@
     gap: 4px;
   }
 
-  .created-at-editor {
+  .created-at-editor,
+  .pin-editor {
     gap: 4px;
   }
 
-  .created-at-input {
+  .created-at-input,
+  .pin-input {
     box-sizing: border-box;
     height: 22px;
     padding: 0 6px;
@@ -272,13 +441,26 @@
     outline: none;
   }
 
-  .created-at-input:focus {
+  .pin-input {
+    width: 4.5em;
+    letter-spacing: 0.15em;
+    text-align: center;
+  }
+
+  .created-at-input:focus,
+  .pin-input:focus {
     border-color: #525962;
   }
 
   .created-at-input::-webkit-calendar-picker-indicator {
     filter: invert(0.7);
     cursor: pointer;
+  }
+
+  .pin-error {
+    font-size: 11px;
+    color: #f87171;
+    white-space: nowrap;
   }
 
   .toolbar-btn {
@@ -303,6 +485,11 @@
   .toolbar-btn:hover {
     color: #8a8a8a;
     border-color: #404040;
+  }
+
+  .toolbar-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
   }
 
   .toolbar-btn.active {
@@ -335,7 +522,8 @@
   }
 
   .toolbar-btn :global(.calendar-time-icon),
-  .toolbar-btn :global(.sticky-icon) {
+  .toolbar-btn :global(.sticky-icon),
+  .toolbar-btn :global(.lock-icon) {
     width: 12px;
     height: 12px;
     flex-shrink: 0;

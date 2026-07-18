@@ -19,17 +19,21 @@
     openNoteByName,
     STICKY_NOTE_W,
     STICKY_NOTE_H,
+    unlockedNoteActivity,
+    touchNoteActivity,
   } from './store';
   import { popupFrame } from '../utils/popupFrame';
   import {
     parseNoteMeta,
     STICKY_COLORS,
     normalizeStickyColor,
+    isNoteLocked,
   } from './noteTypes/parseNoteMeta';
   import {
     toWikiPreviewMarkdown,
     parseWikiHref,
   } from '../utils/wikiLinks';
+  import NoteUnlockPanel from './NoteUnlockPanel.svelte';
 
   hljs.registerLanguage('plaintext', plaintext);
   hljs.registerLanguage('markdown', markdown);
@@ -67,6 +71,9 @@
     normalizeStickyColor(parseNoteMeta(localBody).color ?? color) ?? 'yellow'
   );
   let bodyContent = $derived(parseNoteMeta(localBody).bodyWithoutMeta);
+  let contentLocked = $derived(
+    !missing && isNoteLocked(localBody) && $unlockedNoteActivity[guid] == null
+  );
 
   $effect(() => {
     const content = bodyContent || '';
@@ -125,6 +132,15 @@
     raiseNotePopup(id);
   }
 
+  function markNoteActivity() {
+    touchNoteActivity(guid);
+  }
+
+  function handleStickyPointerDown() {
+    handleRaise();
+    markNoteActivity();
+  }
+
   function handleFrame(rect) {
     updateNotePopupRect(id, rect);
   }
@@ -155,7 +171,7 @@
     onFrame: handleFrame,
   }}
   style:z-index={zIndex}
-  onpointerdown={handleRaise}
+  onpointerdown={handleStickyPointerDown}
 >
   <div class="popup-titlebar sticky-titlebar flex items-center">
     <span class="sticky-title truncate flex-1 min-w-0">{noteName || 'Note'}</span>
@@ -188,6 +204,10 @@
   <div class="sticky-body thin-scrollbar flex-1 min-h-0 overflow-y-auto">
     {#if missing}
       <p class="sticky-empty">Note not found</p>
+    {:else if contentLocked}
+      <div class="sticky-locked">
+        <NoteUnlockPanel {guid} variant="sticky" />
+      </div>
     {:else}
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -330,6 +350,11 @@
     margin: 0;
     font-size: 12px;
     opacity: 0.55;
+  }
+
+  .sticky-locked {
+    min-height: 100%;
+    display: flex;
   }
 
   .sticky-preview {

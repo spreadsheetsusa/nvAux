@@ -9,7 +9,7 @@ import { extractMediaLinks, hasQueueableMedia } from '../utils/extractMediaLinks
  *   url: string,
  *   noteGuid: string,
  *   noteName: string,
- *   provider: 'soundcloud' | 'image' | 'video',
+ *   provider: 'soundcloud' | 'youtube' | 'image' | 'video',
  *   label?: string,
  *   played: boolean
  * }} MediaTrack
@@ -51,12 +51,13 @@ export function soundcloudUrlsFrom(text) {
 /**
  * Infer provider for tracks that may predate the provider field.
  * @param {Pick<MediaTrack, 'url' | 'provider'> | null | undefined} track
- * @returns {'soundcloud' | 'image' | 'video'}
+ * @returns {'soundcloud' | 'youtube' | 'image' | 'video'}
  */
 export function mediaTrackProvider(track) {
   if (track?.provider) return track.provider;
   const url = track?.url || '';
   if (/soundcloud\.com|snd\.sc/i.test(url)) return 'soundcloud';
+  if (/youtube\.com|youtu\.be/i.test(url)) return 'youtube';
   if (/\.(?:mp4|webm|ogg|mov)(?:\?|$)/i.test(url)) return 'video';
   if (/\.(?:png|jpe?g|gif|webp|avif|svg)(?:\?|$)/i.test(url)) return 'image';
   return 'soundcloud';

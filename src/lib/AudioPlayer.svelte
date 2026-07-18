@@ -89,7 +89,8 @@
   let currentUrl = $derived(currentTrack?.url ?? '');
   let provider = $derived(mediaTrackProvider(currentTrack));
   let isSoundCloud = $derived(provider === 'soundcloud');
-  let isVisual = $derived(provider === 'image' || provider === 'video');
+  let isYouTube = $derived(provider === 'youtube');
+  let isVisual = $derived(provider === 'image' || provider === 'video' || provider === 'youtube');
   let visible = $derived(playlist.length > 0);
   let hasMultiple = $derived(playlist.length > 1);
   let canPrev = $derived(trackIndex > 0);
@@ -104,6 +105,8 @@
 
   /** @type {HTMLVideoElement | null} */
   let videoEl = $state(null);
+  /** YouTube IFrame API player — raw so Svelte does not proxy the third-party object. */
+  let ytPlayer = $state.raw(null);
   let visualAutoplay = $state(false);
 
   let iframeEl = $state(null);
@@ -166,15 +169,31 @@
     mediaPlayerHeight.set(0);
   }
 
+  // Reset visual autoplay when the current track changes.
+  // Must run before the play-request effect so Play Now can re-assert autoplay.
+  $effect(() => {
+    void currentUrl;
+    visualAutoplay = false;
+  });
+
   // Play Now / jump-to-play signals from the session API.
   $effect(() => {
     const token = $mediaPlayRequest;
     if (!token) return;
     if (untrack(() => isVisual)) {
       visualAutoplay = true;
-      if (untrack(() => provider) === 'video') {
+      const p = untrack(() => provider);
+      if (p === 'video') {
         const el = untrack(() => videoEl);
         el?.play?.().catch(() => {});
+        isPlaying = true;
+      } else if (p === 'youtube') {
+        const yt = untrack(() => ytPlayer);
+        try {
+          yt?.playVideo?.();
+        } catch {
+          /* ignore */
+        }
         isPlaying = true;
       }
       return;
@@ -193,7 +212,8 @@
     const url = currentUrl;
     const label = currentTrack?.label;
     const sc = isSoundCloud;
-    if (!url || !sc) {
+    const yt = isYouTube;
+    if (!url || (!sc && !yt)) {
       oembedTitle = '';
       return;
     }
@@ -205,7 +225,10 @@
 
     let cancelled = false;
     oembedTitle = '';
-    fetch(`https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(url)}`)
+    const oembedUrl = sc
+      ? `https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(url)}`
+      : `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(url)}`;
+    fetch(oembedUrl)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (cancelled || !data) return;
@@ -220,13 +243,7 @@
     };
   });
 
-  // Reset visual autoplay when the current track changes.
-  $effect(() => {
-    void currentUrl;
-    visualAutoplay = false;
-  });
-
-  // Pause / tear down SoundCloud widget while viewing image/video tracks.
+  // Pause / tear down SoundCloud widget while viewing image/video/youtube tracks.
   $effect(() => {
     if (isSoundCloud) return;
     const activeWidget = untrack(() => widget);
@@ -427,6 +444,24 @@
       }
       return;
     }
+    if (provider === 'youtube') {
+      const yt = ytPlayer;
+      if (!yt) return;
+      try {
+        const state = yt.getPlayerState?.();
+        const playing = state === window.YT?.PlayerState?.PLAYING;
+        if (playing || isPlaying) {
+          yt.pauseVideo?.();
+          isPlaying = false;
+        } else {
+          yt.playVideo?.();
+          isPlaying = true;
+        }
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
     if (provider === 'image') {
       if (canNext) goNext();
       return;
@@ -439,21 +474,34 @@
   function onVisualEnded() {
     isPlaying = false;
     const advanced = mediaAdvanceAfterFinish();
-    if (advanced) visualAutoplay = true;
+    // Bump play request so autoplay survives the currentUrl reset effect.
+    if (advanced) mediaPlayRequest.update((n) => n + 1);
+  }
+
+  function onYtPlayState(playing) {
+    isPlaying = !!playing;
   }
 
   function goPrev() {
     if (!canPrev) return;
-    if (isSoundCloud) playAfterLoad = isPlaying;
-    else visualAutoplay = provider === 'video' && isPlaying;
-    mediaJumpTo(trackIndex - 1, false);
+    if (isSoundCloud) {
+      playAfterLoad = isPlaying;
+      mediaJumpTo(trackIndex - 1, false);
+      return;
+    }
+    const shouldPlay = (provider === 'video' || provider === 'youtube') && isPlaying;
+    mediaJumpTo(trackIndex - 1, shouldPlay);
   }
 
   function goNext() {
     if (!canNext) return;
-    if (isSoundCloud) playAfterLoad = isPlaying;
-    else visualAutoplay = provider === 'video' && isPlaying;
-    mediaJumpTo(trackIndex + 1, false);
+    if (isSoundCloud) {
+      playAfterLoad = isPlaying;
+      mediaJumpTo(trackIndex + 1, false);
+      return;
+    }
+    const shouldPlay = (provider === 'video' || provider === 'youtube') && isPlaying;
+    mediaJumpTo(trackIndex + 1, shouldPlay);
   }
 
   function onSeekInput(e) {
@@ -476,6 +524,11 @@
   function closePlayer() {
     try {
       widget?.pause?.();
+    } catch {
+      /* ignore */
+    }
+    try {
+      ytPlayer?.pauseVideo?.();
     } catch {
       /* ignore */
     }
@@ -535,7 +588,9 @@
         label={trackPart}
         autoplay={visualAutoplay}
         bind:videoEl
+        bind:ytPlayer
         onEnded={onVisualEnded}
+        onPlayState={onYtPlayState}
       />
     {/if}
 
@@ -574,7 +629,13 @@
         type="button"
         class="play-btn flex-shrink-0"
         onclick={togglePlay}
-        disabled={isSoundCloud ? !ready : provider === 'image' ? !canNext : false}
+        disabled={isSoundCloud
+          ? !ready
+          : provider === 'image'
+            ? !canNext
+            : provider === 'youtube'
+              ? !ytPlayer
+              : false}
         aria-label={provider === 'image' ? 'Next' : isPlaying ? 'Pause' : 'Play'}
       >
         {#if isPlaying}

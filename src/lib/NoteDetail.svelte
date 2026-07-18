@@ -30,6 +30,8 @@
     showStatusBar,
     getWikiNoteNames,
     syncMarkdownPreviewForNoteType,
+    unlockedNoteActivity,
+    touchNoteActivity,
   } from './store';
 
   import { debounce } from '../utils/debounce';
@@ -46,6 +48,8 @@
   import Settings from './Settings.svelte';
   import WikiLinkSuggest from './WikiLinkSuggest.svelte';
   import NoteToolbar from './NoteToolbar.svelte';
+  import NoteUnlockPanel from './NoteUnlockPanel.svelte';
+  import { isNoteLocked } from './noteTypes/parseNoteMeta';
   import { resolveNoteType } from './noteTypes/resolveNoteType';
   import KanbanBoard from './noteTypes/kanban/KanbanBoard.svelte';
 
@@ -94,6 +98,12 @@
     !!$selectedNote &&
       !isEmptyObject($selectedNote) &&
       $selectedNote.guid !== SETTINGS_GUID
+  );
+
+  let contentLocked = $derived(
+    canPreview &&
+      isNoteLocked($bodyText) &&
+      $unlockedNoteActivity[$selectedNote?.guid] == null
   );
 
   let showPreview = $derived(canPreview && $markdownPreview);
@@ -262,13 +272,21 @@
     const title = parseWikiHref(anchor.getAttribute('href'));
     if (title) openNoteByName(title);
   }
+
+  function markNoteActivity() {
+    const guid = $selectedNote?.guid;
+    if (guid) touchNoteActivity(guid);
+  }
 </script>
 
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   bind:clientWidth={innerWidth}
   bind:clientHeight={innerHeight}
   class="note-detail relative flex flex-col flex-1 min-h-0 overflow-hidden border-box"
   style="background: var(--app-notedetail-background); margin-bottom: {$showStatusBar ? '35px' : '0'};"
+  onpointerdown={markNoteActivity}
+  onkeydown={markNoteActivity}
 >
   {#if isEmptyObject($selectedNote)}
     <div class="empty-state flex-1 min-h-0 w-full flex items-center justify-center">
@@ -280,7 +298,9 @@
     </div>
   {:else}
     <NoteToolbar />
-    {#if showKanban}
+    {#if contentLocked}
+      <NoteUnlockPanel guid={$selectedNote.guid} />
+    {:else if showKanban}
       <KanbanBoard body={$bodyText} onChange={handleKanbanChange} />
     {:else if showMarkdownPreview}
       <!-- Event delegation for [[wiki]] anchors inside {@html} preview -->

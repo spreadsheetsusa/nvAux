@@ -48,6 +48,7 @@
   let open = $derived($sidebarOpen);
   let drawerWidthPx = $derived(Math.max(200, viewportWidth - DRAWER_PEEK_PX));
   let panelWidth = $derived(drawer ? `${drawerWidthPx}px` : `${$sidebarWidth}px`);
+  let desktopWidthPx = $derived(open ? $sidebarWidth : 0);
 </script>
 
 <aside
@@ -57,7 +58,7 @@
   aria-hidden={!open}
   style={drawer
     ? `--sidebar-panel-width: ${panelWidth}; --drawer-peek: ${DRAWER_PEEK_PX}px;`
-    : `width: ${open ? $sidebarWidth : 0}px; overflow: ${open ? 'visible' : 'hidden'}; --sidebar-panel-width: ${panelWidth};`}
+    : `width: ${desktopWidthPx}px; overflow: hidden; --sidebar-panel-width: ${panelWidth};`}
 >
   <div
     class="sidebar-inner h-full overflow-hidden flex flex-col"
@@ -72,20 +73,31 @@
       </div>
     {/if}
   </div>
-  {#if open && !drawer}
-    <ResizeHandle
-      orientation="horizontal"
-      bind:value={$sidebarWidth}
-      min={160}
-      max={1200}
-      getMax={getSidebarMax}
-      ariaLabel="Resize sidebar"
-    />
-  {/if}
 </aside>
+{#if !drawer}
+  <!-- Sibling of aside (and of .main-content) so the handle can sit above main
+       without raising the whole sidebar stacking context. -->
+  <div
+    class="sidebar-resize-layer"
+    style="width: {desktopWidthPx}px;"
+    aria-hidden={!open}
+  >
+    {#if open}
+      <ResizeHandle
+        orientation="horizontal"
+        bind:value={$sidebarWidth}
+        min={160}
+        max={1200}
+        getMax={getSidebarMax}
+        ariaLabel="Resize sidebar"
+      />
+    {/if}
+  </div>
+{/if}
 
 <style>
   .sidebar {
+    /* Under .main-content (z-index: 1) so slide/expand content stays beneath. */
     z-index: 0;
     background-color: var(--app-statusbar-background);
     border-right: 1px solid transparent;
@@ -93,13 +105,24 @@
   }
 
   .sidebar.open {
-    /* Above .main-content (z-index: 1) so the horizontal resize accent is visible.
-       Drawer mode overrides with z-index: 50 below. */
-    z-index: 2;
     border-right-color: var(--app-statusbar-border);
   }
 
-  /* Mobile: iOS-style overlay drawer (does not consume flex width). */
+  .sidebar-resize-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    z-index: 2;
+    pointer-events: none;
+    transition: width 300ms ease;
+  }
+
+  .sidebar-resize-layer :global(.resize-handle) {
+    pointer-events: auto;
+  }
+
+  /* Mobile: overlay drawer above dimmed main; peek strip keeps backdrop tappable. */
   .sidebar.drawer {
     position: fixed;
     top: 0;

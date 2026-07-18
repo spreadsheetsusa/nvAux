@@ -12,8 +12,7 @@
   import { buildNoteGraph } from '../utils/wikiLinks';
   import { createForceSimulation } from '../utils/forceGraph';
   import ResizeHandle from './ResizeHandle.svelte';
-  import IconXcircle from './IconXcircle.svelte';
-  import IconZoomFit from './IconZoomFit.svelte';
+  import Icon from '$lib/components/Icon.svelte';
 
   const GRAPH_MIN_PX = 140;
   const CALENDAR_MIN_PX = 120;
@@ -497,7 +496,7 @@
         title="Zoom to fit"
         onclick={zoomToFit}
       >
-        <IconZoomFit />
+        <Icon name="ZoomFit" />
       </button>
       <button
         type="button"
@@ -506,7 +505,7 @@
         title="Close"
         onclick={close}
       >
-        <IconXcircle />
+        <Icon name="Xcircle" />
       </button>
     </div>
   </div>

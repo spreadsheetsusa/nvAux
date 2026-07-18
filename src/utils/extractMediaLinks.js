@@ -2,11 +2,14 @@
  * Extract known media URLs from note body text.
  * Extensible: add providers here as more players are supported.
  *
- * @typedef {{ provider: 'soundcloud' | 'image' | 'video', url: string, label?: string }} MediaLink
+ * @typedef {{ provider: 'soundcloud' | 'youtube' | 'image' | 'video', url: string, label?: string }} MediaLink
  */
 
 const SOUNDCLOUD_RE =
   /https?:\/\/(?:(?:www|m|on)\.)?(?:soundcloud\.com\/[^\s<>"'`)\]]+|snd\.sc\/[^\s<>"'`)\]]+)/gi;
+
+const YOUTUBE_RE =
+  /https?:\/\/(?:(?:www|m|music)\.)?(?:youtube\.com\/(?:watch\?[^\s<>"'`)\]]*|shorts\/[^\s<>"'`)\]]+|embed\/[^\s<>"'`)\]]+|live\/[^\s<>"'`)\]]+)|youtu\.be\/[^\s<>"'`)\]]+)/gi;
 
 const MD_IMAGE_RE = /!\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)/gi;
 const MD_LINK_RE = /(?<!!)\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/gi;
@@ -15,6 +18,9 @@ const BARE_URL_RE =
 
 const IMAGE_EXT_RE = /\.(?:png|jpe?g|gif|webp|avif|svg)(?:\?|$)/i;
 const VIDEO_EXT_RE = /\.(?:mp4|webm|ogg|mov)(?:\?|$)/i;
+
+const YOUTUBE_HOST_RE = /(?:youtube\.com|youtu\.be)/i;
+const SOUNDCLOUD_HOST_RE = /soundcloud\.com|snd\.sc/i;
 
 /**
  * @param {string} url
@@ -33,6 +39,53 @@ function fileProviderForUrl(url) {
  */
 function cleanUrl(raw) {
   return raw.replace(/[.,;:!?)]+$/, '');
+}
+
+/**
+ * Normalize a YouTube URL to its 11-char video id, or null.
+ * @param {string | null | undefined} url
+ * @returns {string | null}
+ */
+export function youtubeIdFromUrl(url) {
+  if (!url) return null;
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+
+  const host = parsed.hostname.replace(/^www\./i, '').toLowerCase();
+  const path = parsed.pathname;
+
+  if (host === 'youtu.be') {
+    const id = path.split('/').filter(Boolean)[0] || '';
+    return /^[\w-]{11}$/.test(id) ? id : null;
+  }
+
+  if (host === 'youtube.com' || host === 'm.youtube.com' || host === 'music.youtube.com') {
+    const v = parsed.searchParams.get('v');
+    if (v && /^[\w-]{11}$/.test(v)) return v;
+
+    const parts = path.split('/').filter(Boolean);
+    if (
+      parts.length >= 2 &&
+      (parts[0] === 'shorts' || parts[0] === 'embed' || parts[0] === 'live')
+    ) {
+      const id = parts[1];
+      return /^[\w-]{11}$/.test(id) ? id : null;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * @param {string} url
+ * @returns {boolean}
+ */
+function isYouTubeUrl(url) {
+  return !!youtubeIdFromUrl(url);
 }
 
 /**
@@ -101,6 +154,14 @@ export function extractMediaLinks(text) {
     push('soundcloud', url, label);
   }
 
+  for (const match of text.matchAll(YOUTUBE_RE)) {
+    const url = cleanUrl(match[0]);
+    if (!isYouTubeUrl(url)) continue;
+    const urlIndex = match.index ?? 0;
+    const label = markdownLabelBefore(text, urlIndex, url);
+    push('youtube', url, label);
+  }
+
   for (const match of text.matchAll(MD_IMAGE_RE)) {
     const label = (match[1] || '').trim() || undefined;
     const url = cleanUrl(match[2]);
@@ -111,7 +172,7 @@ export function extractMediaLinks(text) {
   for (const match of text.matchAll(MD_LINK_RE)) {
     const label = (match[1] || '').trim() || undefined;
     const url = cleanUrl(match[2]);
-    if (/soundcloud\.com|snd\.sc/i.test(url)) continue;
+    if (SOUNDCLOUD_HOST_RE.test(url) || YOUTUBE_HOST_RE.test(url)) continue;
     const provider = fileProviderForUrl(url);
     if (provider) push(provider, url, label);
   }
@@ -119,7 +180,7 @@ export function extractMediaLinks(text) {
   for (const match of text.matchAll(BARE_URL_RE)) {
     const url = cleanUrl(match[0]);
     if (seen.has(url)) continue;
-    if (/soundcloud\.com|snd\.sc/i.test(url)) continue;
+    if (SOUNDCLOUD_HOST_RE.test(url) || YOUTUBE_HOST_RE.test(url)) continue;
     const provider = fileProviderForUrl(url);
     if (provider) push(provider, url);
   }
@@ -143,6 +204,7 @@ export function firstMediaLink(text) {
 export function hasQueueableMedia(text) {
   const t = text || '';
   if (/soundcloud\.com|snd\.sc/i.test(t)) return true;
+  if (/youtube\.com|youtu\.be/i.test(t)) return true;
   return /https?:\/\/[^\s<>"'`)\]]+\.(?:png|jpe?g|gif|webp|avif|svg|mp4|webm|ogg|mov)(?:\?|[^\w]|$)/i.test(
     t
   );

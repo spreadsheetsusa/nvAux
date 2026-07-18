@@ -125,7 +125,8 @@ body.is-panel-resizing * {
 }
 
 body.is-panel-resizing .transition-all,
-body.is-panel-resizing .sidebar {
+body.is-panel-resizing .sidebar,
+body.is-panel-resizing .sidebar-resize-layer {
 	transition: none !important;
 }
 

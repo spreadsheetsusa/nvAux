@@ -8,8 +8,10 @@ import { schema } from './schema';
 import { applyAccentGradient } from '../utils/accentGradient';
 import { defaultKanbanBody } from './noteTypes/kanban/kanbanModel';
 import {
+  applyLockedMeta,
   applyStickyMeta,
   getStickyColor,
+  isNoteLocked,
   isNoteSticky,
   normalizeStickyColor,
 } from './noteTypes/parseNoteMeta';
@@ -74,6 +76,21 @@ const storedMarkdownPreviewPlain = readStoredBool('markdownPreviewPlain', false)
 const storedMarkdownPreviewRich = readStoredBool('markdownPreviewRich', true);
 const storedBirthDate = localStorage.getItem('birthDate') || '1982-05-24';
 const storedExpectedLongevity = localStorage.getItem('expectedLongevity') || '80';
+/** Exactly 6 digits, or empty when unset. */
+export const LOCK_PIN_RE = /^\d{6}$/;
+const storedLockPin = (() => {
+  const raw = localStorage.getItem('lockPin') || '';
+  return LOCK_PIN_RE.test(raw) ? raw : '';
+})();
+/** Inactivity auto-relock delay in seconds; 0 = never. */
+const LOCK_TIMEOUT_MAX = 3600;
+const LOCK_TIMEOUT_STEP = 15;
+const storedLockTimeoutSeconds = (() => {
+  const raw = Number(localStorage.getItem('lockTimeoutSeconds'));
+  if (!Number.isFinite(raw) || raw <= 0) return 0;
+  const clamped = Math.min(LOCK_TIMEOUT_MAX, Math.max(0, raw));
+  return Math.round(clamped / LOCK_TIMEOUT_STEP) * LOCK_TIMEOUT_STEP;
+})();
 const LIFE_CALENDAR_STATS = [
   'title',
   'yearsOld',
@@ -392,6 +409,16 @@ export const expectedLongevity = writable(storedExpectedLongevity);
 export const lifeCalendarStat = writable(storedLifeCalendarStat);
 export const LIFE_CALENDAR_STAT_MODES = LIFE_CALENDAR_STATS;
 export const accentColor = writable(storedAccentColor);
+export const lockPin = writable(storedLockPin);
+export const lockTimeoutSeconds = writable(storedLockTimeoutSeconds);
+/** Session-only: scroll Settings Lock section + show setup notice. */
+export const settingsLockFocus = writable(false);
+/**
+ * Session unlocks for locked notes: guid → last activity timestamp (ms).
+ * Cleared on reload; inactivity may remove entries when timeout > 0.
+ * @type {import('svelte/store').Writable<Record<string, number>>}
+ */
+export const unlockedNoteActivity = writable({});
 
 accentColor.subscribe((v) => {
   if (typeof document === 'undefined') return;
@@ -755,6 +782,96 @@ export async function syncStickyNotes() {
   });
 }
 
+/** @returns {boolean} */
+export function isLockPinSet() {
+  return LOCK_PIN_RE.test(get(lockPin) || '');
+}
+
+/**
+ * @param {string} pin
+ * @returns {boolean}
+ */
+export function verifyLockPin(pin) {
+  return LOCK_PIN_RE.test(pin) && pin === get(lockPin);
+}
+
+/** Open Settings and highlight the Lock section (PIN not set yet). */
+export async function promptSettingsForLockPin() {
+  settingsLockFocus.set(true);
+  await selectNoteByGuid(SETTINGS_GUID);
+}
+
+/**
+ * @param {string | null | undefined} guid
+ * @returns {boolean}
+ */
+export function isNoteSessionUnlocked(guid) {
+  if (!guid) return false;
+  return get(unlockedNoteActivity)[guid] != null;
+}
+
+/**
+ * @param {string} guid
+ */
+export function unlockNoteSession(guid) {
+  if (!guid) return;
+  const now = Date.now();
+  unlockedNoteActivity.update((m) => ({ ...m, [guid]: now }));
+}
+
+/**
+ * @param {string} guid
+ */
+export function lockNoteSession(guid) {
+  if (!guid) return;
+  unlockedNoteActivity.update((m) => {
+    if (m[guid] == null) return m;
+    const next = { ...m };
+    delete next[guid];
+    return next;
+  });
+}
+
+/**
+ * @param {string} guid
+ */
+export function touchNoteActivity(guid) {
+  if (!guid) return;
+  unlockedNoteActivity.update((m) => {
+    if (m[guid] == null) return m;
+    return { ...m, [guid]: Date.now() };
+  });
+}
+
+/**
+ * True when the note body may be shown (not locked, or session-unlocked).
+ * @param {string | null | undefined} guid
+ * @param {string | null | undefined} body
+ */
+export function isNoteContentAccessible(guid, body) {
+  if (!isNoteLocked(body)) return true;
+  return isNoteSessionUnlocked(guid);
+}
+
+// Auto-relock unlocked notes after inactivity (skipped when timeout is 0).
+if (typeof window !== 'undefined') {
+  window.setInterval(() => {
+    const timeoutSec = Number(get(lockTimeoutSeconds));
+    if (!Number.isFinite(timeoutSec) || timeoutSec <= 0) return;
+    const cutoff = Date.now() - timeoutSec * 1000;
+    unlockedNoteActivity.update((m) => {
+      let changed = false;
+      /** @type {Record<string, number>} */
+      const next = {};
+      for (const [guid, last] of Object.entries(m)) {
+        if (last >= cutoff) next[guid] = last;
+        else changed = true;
+      }
+      return changed ? next : m;
+    });
+  }, 1000);
+}
+
 /**
  * Toggle sticky frontmatter on a note and sync Windowed floaters.
  * @param {any} noteDoc RxDB document
@@ -810,6 +927,31 @@ export async function setStickyColor(noteDoc, color) {
   const prevBody = noteDoc.body ?? '';
   if (!isNoteSticky(prevBody)) return;
   await setNoteSticky(noteDoc, true, c);
+}
+
+/**
+ * Set or clear locked frontmatter on a note.
+ * @param {any} noteDoc RxDB document
+ * @param {boolean} locked
+ */
+export async function setNoteLocked(noteDoc, locked) {
+  if (!noteDoc?.guid || noteDoc.guid === SETTINGS_GUID) return;
+  const prevBody = noteDoc.body ?? '';
+  const nextBody = applyLockedMeta(prevBody, !!locked);
+
+  await noteDoc.incrementalModify((data) => {
+    data.body = nextBody;
+    data.updatedAt = Date.now();
+    return data;
+  });
+
+  const selected = get(selectedNote);
+  if (selected?.guid === noteDoc.guid) {
+    bodyText.set(nextBody);
+  }
+
+  // Locking or clearing always drops any open session unlock.
+  lockNoteSession(noteDoc.guid);
 }
 
 /** @param {string} id */
@@ -1005,6 +1147,13 @@ persistPreference(birthDate, 'birthDate', (v) => v);
 persistPreference(expectedLongevity, 'expectedLongevity', (v) => v);
 persistPreference(lifeCalendarStat, 'lifeCalendarStat', (v) => v);
 persistPreference(accentColor, 'accentColor', (v) => normalizeAccentColor(v));
+persistPreference(lockPin, 'lockPin', (v) => (LOCK_PIN_RE.test(v) ? v : ''));
+persistPreference(lockTimeoutSeconds, 'lockTimeoutSeconds', (v) => {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return '0';
+  const clamped = Math.min(LOCK_TIMEOUT_MAX, Math.max(0, n));
+  return String(Math.round(clamped / LOCK_TIMEOUT_STEP) * LOCK_TIMEOUT_STEP);
+});
 
 appWindowFrame.subscribe((v) => {
   if (v) localStorage.setItem('appWindowFrame', JSON.stringify(v));

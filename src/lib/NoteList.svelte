@@ -15,6 +15,7 @@
     invalidateWikiNoteNames,
   } from './store';
   import { escapeRegExp } from '../utils/escapeRegExp';
+  import { isNoteLocked } from './noteTypes/parseNoteMeta';
   import FileListItemContextMenu from './FileListItemContextMenu.svelte';
 
   const BODY_PREVIEW_LEN = 100;
@@ -103,6 +104,7 @@
   /** @param {string | null | undefined} body */
   const bodyPreview = (body) => {
     if (!body) return '';
+    if (isNoteLocked(body)) return 'Locked';
     return body.length > BODY_PREVIEW_LEN ? body.slice(0, BODY_PREVIEW_LEN) : body;
   };
 

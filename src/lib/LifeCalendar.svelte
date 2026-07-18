@@ -1,8 +1,7 @@
 <script>
   import { onMount, tick } from 'svelte';
   import { addYears, addDays, differenceInDays, format, startOfDay } from 'date-fns';
-  import IconChevronLeft from './IconChevronLeft.svelte';
-  import IconGraph from './IconGraph.svelte';
+  import Icon from '$lib/components/Icon.svelte';
   import WeekNoteChart from './WeekNoteChart.svelte';
   import {
     birthDate,
@@ -676,7 +675,7 @@
           title="Graph view"
           onclick={() => graphViewOpen.set(true)}
         >
-          <IconGraph />
+          <Icon name="Graph" />
         </button>
       {/if}
     </div>
@@ -742,7 +741,7 @@
             aria-label="Back to life calendar"
             onclick={closeWeek}
           >
-            <IconChevronLeft />
+            <Icon name="ChevronLeft" />
           </button>
           <div class="week-pane-meta flex flex-col flex-1 min-w-0">
             <h1 class="week-pane-title">Week {selected.weekOfYear + 1}</h1>
@@ -758,7 +757,7 @@
               title="Graph view"
               onclick={() => graphViewOpen.set(true)}
             >
-              <IconGraph />
+              <Icon name="Graph" />
             </button>
           {/if}
           {#if currentWeekMeta}
