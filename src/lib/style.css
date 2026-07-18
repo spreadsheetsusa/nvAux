@@ -12,7 +12,7 @@ a { color: inherit; text-decoration: inherit; }
 button, input, optgroup, select, textarea { padding: 0; line-height: inherit; color: inherit; }
 pre, code, kbd, samp { font-family: Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
 
-html, body { margin: 0; padding: 0; font-family: Verdana, Geneva, Tahoma, sans-serif; font-size: 0.9rem; height: 100dvh; width: 100dvw; overflow: hidden;}
+html, body { margin: 0; padding: 0; font-family: Verdana, Geneva, Tahoma, sans-serif; font-size: 0.9rem; height: 100dvh; width: 100%; max-width: 100%; overflow: hidden;}
 .absolute { position: absolute; }
 .bg-gray-200 { background-color: #edf2f7; }
 .bg-gray-800 { background-color: #2d3748; }
@@ -70,7 +70,7 @@ html, body { margin: 0; padding: 0; font-family: Verdana, Geneva, Tahoma, sans-s
 .text-gray-400 { color: #a0aec0; }
 .truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .w-full { width: 100%; }
-.w-screen {  width: 100vw; }
+.w-screen {  width: 100%; max-width: 100%; }
 .transition-all { transition-property: all; transition-duration: 300ms; transition-timing-function: ease; }
 
 .btn { padding: 12px 20px; border-radius: 3px; font-size: 14px; }

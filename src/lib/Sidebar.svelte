@@ -1,21 +1,48 @@
 <script>
+  import { onMount } from 'svelte';
   import { sidebarOpen, sidebarWidth, isMobile } from './store';
   import LifeCalendar from './LifeCalendar.svelte';
   import ResizeHandle from './ResizeHandle.svelte';
 
   const MIN_MAIN_CONTENT = 280;
-  /** Leave a peek of the main app — classic iOS drawer. */
-  const DRAWER_PEEK_PX = 44;
+  /** Leave a peek of the main app — classic iOS drawer / tap-to-dismiss strip. */
+  const DRAWER_PEEK_PX = 36;
 
   function getSidebarMax() {
     return Math.max(480, window.innerWidth - MIN_MAIN_CONTENT);
   }
 
+  /** Visible CSS px — prefer visualViewport (iOS layout/dvw often overshoots). */
+  function readViewportWidth() {
+    return Math.round(window.visualViewport?.width ?? window.innerWidth);
+  }
+
+  let viewportWidth = $state(
+    typeof window !== 'undefined' ? readViewportWidth() : 390
+  );
+
+  onMount(() => {
+    const sync = () => {
+      viewportWidth = readViewportWidth();
+    };
+    sync();
+    const vv = window.visualViewport;
+    vv?.addEventListener('resize', sync);
+    vv?.addEventListener('scroll', sync);
+    window.addEventListener('resize', sync);
+    window.addEventListener('orientationchange', sync);
+    return () => {
+      vv?.removeEventListener('resize', sync);
+      vv?.removeEventListener('scroll', sync);
+      window.removeEventListener('resize', sync);
+      window.removeEventListener('orientationchange', sync);
+    };
+  });
+
   let drawer = $derived($isMobile);
   let open = $derived($sidebarOpen);
-  let panelWidth = $derived(
-    drawer ? `calc(100dvw - ${DRAWER_PEEK_PX}px)` : `${$sidebarWidth}px`
-  );
+  let drawerWidthPx = $derived(Math.max(200, viewportWidth - DRAWER_PEEK_PX));
+  let panelWidth = $derived(drawer ? `${drawerWidthPx}px` : `${$sidebarWidth}px`);
 </script>
 
 <aside
@@ -24,7 +51,7 @@
   class:drawer
   aria-hidden={!open}
   style={drawer
-    ? `--sidebar-panel-width: ${panelWidth};`
+    ? `--sidebar-panel-width: ${panelWidth}; --drawer-peek: ${DRAWER_PEEK_PX}px;`
     : `width: ${open ? $sidebarWidth : 0}px; overflow: ${open ? 'visible' : 'hidden'}; --sidebar-panel-width: ${panelWidth};`}
 >
   <div class="sidebar-inner h-full overflow-hidden" style="width: var(--sidebar-panel-width);">
@@ -72,10 +99,12 @@
   .sidebar.drawer .sidebar-inner {
     position: fixed;
     top: 0;
-    left: 0;
     bottom: 0;
+    left: 0;
     height: 100%;
-    max-width: 100dvw;
+    /* Cap against the layout viewport too — visualViewport/dvw can disagree on iOS. */
+    max-width: calc(100% - var(--drawer-peek, 36px));
+    padding-left: env(safe-area-inset-left, 0px);
     background-color: var(--app-statusbar-background);
     border-right: 1px solid var(--app-statusbar-border);
     box-shadow: 8px 0 28px rgba(0, 0, 0, 0.35);
