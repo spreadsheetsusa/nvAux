@@ -13,8 +13,8 @@
     isMobile,
     openNotePopup,
     invalidateWikiNoteNames,
+    noteMatchesQuery,
   } from './store';
-  import { escapeRegExp } from '../utils/escapeRegExp';
   import { isNoteLocked } from './noteTypes/parseNoteMeta';
   import FileListItemContextMenu from './FileListItemContextMenu.svelte';
 
@@ -71,23 +71,12 @@
 
     if (!database) return;
 
-    const sort = [{ updatedAt: 'desc' }];
-    const trimmed = (q || '').trim();
-    const pattern = trimmed ? `.*${escapeRegExp(trimmed)}.*` : '';
-    const query = trimmed
-      ? database.notes.find({
-          selector: {
-            $or: [
-              { name: { $regex: pattern, $options: 'i' } },
-              { body: { $regex: pattern, $options: 'i' } },
-            ],
-          },
-          sort,
-        })
-      : database.notes.find({ sort });
-
+    // Encrypted name/body cannot be used in IndexedDB selectors — filter in memory.
+    const query = database.notes.find({ sort: [{ updatedAt: 'desc' }] });
     const subscription = query.$.subscribe((results) => {
-      notes = results;
+      notes = (q || '').trim()
+        ? results.filter((n) => noteMatchesQuery(n, q))
+        : results;
     });
 
     return () => subscription.unsubscribe();
@@ -121,11 +110,7 @@
   const handleSelectNote = (note) => {
     selectedNote.set(note);
     db$.notes
-      .findOne({
-        selector: {
-          name: note.name,
-        },
-      })
+      .findOne(note.guid)
       .exec()
       .then((n) => {
         bodyText.set(n?.body);

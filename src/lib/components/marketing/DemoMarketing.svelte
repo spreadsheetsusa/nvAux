@@ -20,7 +20,7 @@
   <FeatureSpotlight
     eyebrow="Local-first"
     title="Your vault. Your browser. Done."
-    body="Notes live in IndexedDB on your machine. No account. No sync tax. Install it as a PWA and it keeps working when the Wi‑Fi doesn't."
+    body="Notes live encrypted at rest in IndexedDB on your machine. No account. No sync tax. Install it as a PWA and it keeps working when the Wi‑Fi doesn't."
     align="right"
     motif="local"
   />

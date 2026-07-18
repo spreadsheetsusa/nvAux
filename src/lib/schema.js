@@ -41,5 +41,7 @@ export const schema = {
       "description": "text selection within note body (if any)"
     },
   },
-  required: ['guid', 'name', 'createdAt', 'updatedAt']
+  required: ['guid', 'name', 'createdAt', 'updatedAt'],
+  /** Encrypted at rest via RxDB encryption-crypto-js (guid/timestamps stay queryable). */
+  encrypted: ['name', 'body'],
 };

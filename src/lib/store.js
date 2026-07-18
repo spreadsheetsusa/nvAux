@@ -3,8 +3,15 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { addRxPlugin, createRxDatabase } from 'rxdb';
 import { getRxStorageDexie } from 'rxdb/plugins/storage-dexie';
+import { wrappedKeyEncryptionCryptoJsStorage } from 'rxdb/plugins/encryption-crypto-js';
 
 import { schema } from './schema';
+import {
+  getDbPasswordFingerprint,
+  getOrCreateDbPassword,
+  legacyIndexedDbExists,
+  replaceDbPassword,
+} from './dbEncryption';
 import { applyAccentGradient } from '../utils/accentGradient';
 import { defaultKanbanBody } from './noteTypes/kanban/kanbanModel';
 import {
@@ -188,53 +195,90 @@ const storedStickyNoteFrames = parseStickyNoteFrames(
  * RxDB ************************************************************************
  */
 
-/** Bumped with RxDB 17 schema (indexed fields must be required). */
-const DB_NAME = 'nvauxdb17';
+/** Encrypted-at-rest DB (RxDB encryption-crypto-js + Dexie). */
+const DB_NAME = 'nvauxdb18';
+/** Pre-encryption DB — one-time migrated into nvauxdb18 when present. */
+const LEGACY_DB_NAME = 'nvauxdb17';
 
 /** Seeded Settings note — also the target for preference `updatedAt` bumps. */
 export const SETTINGS_GUID = '00000000-0000-0000-0000-000000000000';
 
+const WELCOME_GUID = '11111111-1111-1111-1111-111111111111';
+const TECHNO_LEAGUE_GUID = '22222222-2222-2222-2222-222222222222';
+const KANBAN_DEMO_GUID = '33333333-3333-3333-3333-333333333333';
+const VIDEO_DEMO_GUID = '44444444-4444-4444-4444-444444444444';
+
 let dbPromise;
 
-const _create = async () => {
-  const isDev = import.meta.env.DEV;
+/** @type {Array<{ guid: string, name: string, body: string, createdAt: number, updatedAt: number }> | null} */
+let pendingRestoreNotes = null;
 
-  if (isDev) {
-    const { RxDBDevModePlugin } = await import('rxdb/plugins/dev-mode');
-    addRxPlugin(RxDBDevModePlugin);
+/** Plaintext schema for reading legacy unencrypted DBs (no `encrypted` fields). */
+function plaintextNoteSchema() {
+  const { encrypted: _enc, ...rest } = schema;
+  return rest;
+}
+
+/**
+ * @param {import('rxdb').RxDatabase} encryptedDb
+ */
+async function migrateFromLegacyIfNeeded(encryptedDb) {
+  const existing = await encryptedDb.notes.find().exec();
+  if (existing.length > 0) return;
+
+  const hasLegacy = await legacyIndexedDbExists(LEGACY_DB_NAME);
+  // false = confidently absent; null = unknown (try open); true = present
+  if (hasLegacy === false) return;
+
+  let legacy;
+  try {
+    legacy = await createRxDatabase({
+      name: LEGACY_DB_NAME,
+      storage: getRxStorageDexie(),
+      ignoreDuplicate: true,
+    });
+    await legacy.addCollections({
+      notes: { schema: plaintextNoteSchema() },
+    });
+  } catch {
+    return;
   }
 
-  const baseStorage = getRxStorageDexie();
-  const storage = isDev
-    ? (await import('rxdb/plugins/validate-ajv')).wrappedValidateAjvStorage({
-        storage: baseStorage,
-      })
-    : baseStorage;
+  try {
+    const docs = await legacy.notes.find().exec();
+    for (const doc of docs) {
+      const j = doc.toJSON();
+      await encryptedDb.notes.insert({
+        guid: j.guid,
+        name: j.name,
+        body: j.body ?? '',
+        createdAt: j.createdAt,
+        updatedAt: j.updatedAt,
+      });
+    }
+  } finally {
+    try {
+      await legacy.remove();
+    } catch {
+      /* ignore */
+    }
+  }
+}
 
-  const db = await createRxDatabase({
-    name: DB_NAME,
-    storage,
-    ignoreDuplicate: isDev,
-  });
-
-  await db.addCollections({ notes: { schema } });
-
-  const WELCOME_GUID = '11111111-1111-1111-1111-111111111111';
-  const TECHNO_LEAGUE_GUID = '22222222-2222-2222-2222-222222222222';
-  const KANBAN_DEMO_GUID = '33333333-3333-3333-3333-333333333333';
-  const VIDEO_DEMO_GUID = '44444444-4444-4444-4444-444444444444';
-
-  const welcomeNote = await db.notes.findOne(WELCOME_GUID).exec();
+/**
+ * @param {import('rxdb').RxDatabase} database
+ */
+async function seedDefaultNotes(database) {
+  const welcomeNote = await database.notes.findOne(WELCOME_GUID).exec();
   if (!welcomeNote) {
-    await db.notes.insert({
+    await database.notes.insert({
       guid: WELCOME_GUID,
       name: '🚀 Welcome to nvAux!',
       body: `Welcome and thank you for using nvAux!
 
 This is a web-based note-taking app inspired by nvALT where searching and creating notes is one in the same action. A few things to keep in-mind:
 
-* All your notes are stored within your browser, locally (and unencrypted for now).
-* Do no trust your data here yet. Not production-ready. Thar be dragons.
+* All your notes are stored within your browser, locally. Note titles and bodies are encrypted at rest in IndexedDB (the decryption key stays on this device so the app opens without a password).
 * 'Add to Home Screen' on iOS Safari for a native app-like experience.
 * Notes can be typed: open **📋 Sample Kanban** for a board (Preview = board, Edit = source). SoundCloud, YouTube, and image/video links queue into the media player — try **🎧 The Gentleman's Techno League - EP1** and **🎥 Video Link Example**.
 
@@ -249,10 +293,9 @@ Don't forget to follow the project on 𝕏 at @nvAuxApp and let us know what you
     });
   }
 
-  // Always make sure the Settings Note exists
-  const settingsNote = await db.notes.findOne(SETTINGS_GUID).exec();
+  const settingsNote = await database.notes.findOne(SETTINGS_GUID).exec();
   if (!settingsNote) {
-    await db.notes.insert({
+    await database.notes.insert({
       guid: SETTINGS_GUID,
       name: '⚙️ nvAux Settings',
       body: 'Adjust Your nvAux Preferences',
@@ -261,9 +304,9 @@ Don't forget to follow the project on 𝕏 at @nvAuxApp and let us know what you
     });
   }
 
-  const technoLeagueNote = await db.notes.findOne(TECHNO_LEAGUE_GUID).exec();
+  const technoLeagueNote = await database.notes.findOne(TECHNO_LEAGUE_GUID).exec();
   if (!technoLeagueNote) {
-    await db.notes.insert({
+    await database.notes.insert({
       guid: TECHNO_LEAGUE_GUID,
       name: "🎧 The Gentleman's Techno League - EP1",
       body: `This note demonstrates soundcloud integration. Any notes containing soundcloud links will be detected and you'll see player/playlist buttons just above this paragraph. The media player is independant of any selected note, so feel free to queue up tracks across many notes and keep hustling.
@@ -284,9 +327,9 @@ The current implementation is basic. There are future plans to support the full 
     });
   }
 
-  const kanbanDemoNote = await db.notes.findOne(KANBAN_DEMO_GUID).exec();
+  const kanbanDemoNote = await database.notes.findOne(KANBAN_DEMO_GUID).exec();
   if (!kanbanDemoNote) {
-    await db.notes.insert({
+    await database.notes.insert({
       guid: KANBAN_DEMO_GUID,
       name: '📋 Sample Kanban',
       body: defaultKanbanBody(),
@@ -295,9 +338,9 @@ The current implementation is basic. There are future plans to support the full 
     });
   }
 
-  const videoDemoNote = await db.notes.findOne(VIDEO_DEMO_GUID).exec();
+  const videoDemoNote = await database.notes.findOne(VIDEO_DEMO_GUID).exec();
   if (!videoDemoNote) {
-    await db.notes.insert({
+    await database.notes.insert({
       guid: VIDEO_DEMO_GUID,
       name: '🎥 Video Link Example',
       body: `Notes that contains links to video media are playable in nvAux. Click Play Now just above.
@@ -308,8 +351,48 @@ https://www.youtube.com/watch?v=Hm3JodBR-vs
       updatedAt: new Date().getTime(),
     });
   }
+}
 
-  return db;
+const _create = async () => {
+  const isDev = import.meta.env.DEV;
+
+  if (isDev) {
+    const { RxDBDevModePlugin } = await import('rxdb/plugins/dev-mode');
+    addRxPlugin(RxDBDevModePlugin);
+  }
+
+  const password = getOrCreateDbPassword();
+  const encryptedStorage = wrappedKeyEncryptionCryptoJsStorage({
+    storage: getRxStorageDexie(),
+  });
+  const storage = isDev
+    ? (await import('rxdb/plugins/validate-ajv')).wrappedValidateAjvStorage({
+        storage: encryptedStorage,
+      })
+    : encryptedStorage;
+
+  const database = await createRxDatabase({
+    name: DB_NAME,
+    storage,
+    password,
+    ignoreDuplicate: isDev,
+  });
+
+  await database.addCollections({ notes: { schema } });
+
+  if (pendingRestoreNotes) {
+    const notes = pendingRestoreNotes;
+    pendingRestoreNotes = null;
+    for (const note of notes) {
+      await database.notes.insert(note);
+    }
+  } else {
+    await migrateFromLegacyIfNeeded(database);
+  }
+
+  await seedDefaultNotes(database);
+
+  return database;
 };
 
 /** Single shared DB open — must assign the promise immediately to avoid concurrent creates. */
@@ -331,6 +414,33 @@ export async function resetDatabase() {
   localStorage.clear();
   invalidateWikiNoteNames();
 }
+
+/**
+ * Re-encrypt all notes under a new on-device key (RxDB passwords are immutable per DB).
+ * @returns {Promise<string>} new key fingerprint
+ */
+export async function regenerateEncryptionKey() {
+  const database = await db();
+  const docs = await database.notes.find().exec();
+  pendingRestoreNotes = docs.map((doc) => {
+    const j = doc.toJSON();
+    return {
+      guid: j.guid,
+      name: j.name,
+      body: j.body ?? '',
+      createdAt: j.createdAt,
+      updatedAt: j.updatedAt,
+    };
+  });
+  await database.remove();
+  dbPromise = undefined;
+  replaceDbPassword();
+  await db();
+  invalidateWikiNoteNames();
+  return getDbPasswordFingerprint();
+}
+
+export { getDbPasswordFingerprint };
 
 /** Unregister service workers and clear Cache Storage. Notes and prefs are kept. */
 export async function hardRefreshApp() {
@@ -1052,6 +1162,33 @@ export async function selectNoteByGuid(guid) {
 }
 
 /**
+ * Exact title match (in-memory — `name` is encrypted at rest and not queryable).
+ * @param {string} name
+ * @returns {Promise<object | null>}
+ */
+export async function findNoteByNameExact(name) {
+  const trimmed = (name || '').trim();
+  if (!trimmed) return null;
+  const database = await db();
+  const docs = await database.notes.find().exec();
+  return docs.find((d) => d.name === trimmed) ?? null;
+}
+
+/**
+ * Case-insensitive substring match on decrypted name/body.
+ * @param {{ name?: string, body?: string }} note
+ * @param {string} query
+ * @returns {boolean}
+ */
+export function noteMatchesQuery(note, query) {
+  const q = (query || '').trim().toLowerCase();
+  if (!q) return true;
+  const title = (note?.name || '').toLowerCase();
+  const body = (note?.body || '').toLowerCase();
+  return title.includes(q) || body.includes(q);
+}
+
+/**
  * Open a note by exact title (name), creating it if missing.
  * Does not alter omniText / filter mode.
  * @param {string} name
@@ -1060,13 +1197,11 @@ export async function selectNoteByGuid(guid) {
 export async function openNoteByName(name) {
   const trimmed = (name || '').trim();
   if (!trimmed) return null;
-  const database = await db();
-  const existing = await database.notes
-    .findOne({ selector: { name: trimmed } })
-    .exec();
+  const existing = await findNoteByNameExact(trimmed);
   if (existing) {
     return selectNoteByGuid(existing.guid);
   }
+  const database = await db();
   const note = await database.notes.insert({
     guid: uuidv4(),
     name: trimmed,

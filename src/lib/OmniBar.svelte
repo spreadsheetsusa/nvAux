@@ -18,6 +18,7 @@
     invalidateWikiNoteNames,
     isMobile,
     selectNoteByGuid,
+    findNoteByNameExact,
   } from './store';
 
   const SETTINGS_GUID = '00000000-0000-0000-0000-000000000000';
@@ -68,36 +69,27 @@
 
   const addNote = async () => {
     const db$ = await db();
-    await db$.notes.findOne({ selector: { name: $omniText } }).exec().then((note) => {
+    const note = await findNoteByNameExact($omniText);
+    omniMode.set('edit');
+    if (note) {
+      selectedNote.set(note);
+      omniText.set(note.name);
+      bodyText.set(note.body);
+    } else {
+      const created = await db$.notes.insert({
+        guid: uuidv4(),
+        name: $omniText,
+        createdAt: new Date().getTime(),
+        updatedAt: new Date().getTime(),
+      });
+      invalidateWikiNoteNames();
+      selectedNote.set(created);
       omniMode.set('edit');
-      if (note) {
-        console.log('note found so lets edit it note: ', note);
-        selectedNote.set(note);
-        omniText.set(note.name);
-        bodyText.set(note.body);
-        return;
-      } else {
-        console.log('no note found so lets create one');
-        db$.notes
-          .insert({
-            guid: uuidv4(),
-            name: $omniText,
-            createdAt: new Date().getTime(),
-            updatedAt: new Date().getTime(),
-          })
-          .then((note) => {
-            invalidateWikiNoteNames();
-            selectedNote.set(note);
-            omniMode.set('edit');
-            bodyText.set('');
-          });
-        return;
-      }
-    }).then(
-      setTimeout(() => {
-        document.getElementById('body-editor')?.focus();
-      }, 50),
-    );
+      bodyText.set('');
+    }
+    setTimeout(() => {
+      document.getElementById('body-editor')?.focus();
+    }, 50);
   };
 </script>
 
