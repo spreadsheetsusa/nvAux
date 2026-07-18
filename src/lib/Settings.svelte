@@ -418,7 +418,7 @@
 
       {#if resetConfirming}
         <p class="text-gray-400" style="margin-top: 10px; font-size: 13px; line-height: 1.4;">
-          Deletes all notes and restores the four seeded defaults. Preferences reset too.
+          Deletes all notes and restores the five seeded defaults. Preferences reset too.
         </p>
         <div class="flex flex-wrap items-center" style="gap: 8px; margin-top: 12px;">
           <button

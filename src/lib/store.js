@@ -222,6 +222,7 @@ const _create = async () => {
   const WELCOME_GUID = '11111111-1111-1111-1111-111111111111';
   const TECHNO_LEAGUE_GUID = '22222222-2222-2222-2222-222222222222';
   const KANBAN_DEMO_GUID = '33333333-3333-3333-3333-333333333333';
+  const VIDEO_DEMO_GUID = '44444444-4444-4444-4444-444444444444';
 
   const welcomeNote = await db.notes.findOne(WELCOME_GUID).exec();
   if (!welcomeNote) {
@@ -235,7 +236,7 @@ This is a web-based note-taking app inspired by nvALT where searching and creati
 * All your notes are stored within your browser, locally (and unencrypted for now).
 * Do no trust your data here yet. Not production-ready. Thar be dragons.
 * 'Add to Home Screen' on iOS Safari for a native app-like experience.
-* Notes can be typed: open **📋 Sample Kanban** for a board (Preview = board, Edit = source). Image/video file links can be queued into the media player like SoundCloud.
+* Notes can be typed: open **📋 Sample Kanban** for a board (Preview = board, Edit = source). SoundCloud, YouTube, and image/video links queue into the media player — try **🎧 The Gentleman's Techno League - EP1** and **🎥 Video Link Example**.
 
 If you are interested in the development of nvAux the project is open-source and available on GitHub at https://github.com/matterofabstract/nvaux
 
@@ -289,6 +290,20 @@ The current implementation is basic. There are future plans to support the full 
       guid: KANBAN_DEMO_GUID,
       name: '📋 Sample Kanban',
       body: defaultKanbanBody(),
+      createdAt: new Date().getTime(),
+      updatedAt: new Date().getTime(),
+    });
+  }
+
+  const videoDemoNote = await db.notes.findOne(VIDEO_DEMO_GUID).exec();
+  if (!videoDemoNote) {
+    await db.notes.insert({
+      guid: VIDEO_DEMO_GUID,
+      name: '🎥 Video Link Example',
+      body: `Notes that contains links to video media are playable in nvAux. Click Play Now just above.
+
+https://www.youtube.com/watch?v=Hm3JodBR-vs
+`,
       createdAt: new Date().getTime(),
       updatedAt: new Date().getTime(),
     });

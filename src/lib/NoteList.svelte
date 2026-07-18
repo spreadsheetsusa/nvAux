@@ -104,7 +104,7 @@
   /** @param {string | null | undefined} body */
   const bodyPreview = (body) => {
     if (!body) return '';
-    if (isNoteLocked(body)) return 'Locked';
+    if (isNoteLocked(body)) return '🔒 Locked';
     return body.length > BODY_PREVIEW_LEN ? body.slice(0, BODY_PREVIEW_LEN) : body;
   };
 

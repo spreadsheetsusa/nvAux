@@ -44,7 +44,7 @@
   <FeatureSpotlight
     eyebrow="Media session"
     title="Notes that keep the beat."
-    body="Queue SoundCloud from a note — Play Now, Play Next, Add Last — and keep writing while the player rides under the Omnibar. The session stays until you close it."
+    body="Queue SoundCloud or video (YouTube and file links) from a note — Play Now, Play Next, Add Last — and keep writing while the player rides under the Omnibar. The session stays until you close it."
     align="left"
     motif="media"
   />

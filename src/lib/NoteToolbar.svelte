@@ -53,8 +53,9 @@
   let canSticky = $derived(canPreview && noteType === 'markdown');
   let stickyOn = $derived(canSticky && isNoteSticky(activeBody));
   let lockedOn = $derived(canPreview && isNoteLocked(activeBody));
+  let unlockedMap = $derived($unlockedNoteActivity);
   let sessionUnlocked = $derived(
-    !!activeNote?.guid && $unlockedNoteActivity[activeNote.guid] != null
+    !!activeNote?.guid && unlockedMap?.[activeNote.guid] != null
   );
 
   let hasMedia = $derived(canPreview && hasQueueableMedia(activeBody));
@@ -75,7 +76,7 @@
   let pinGuid = $state(null);
   let pinDraft = $state('');
   let pinError = $state('');
-  let pinEditing = $derived(pinGuid != null && pinGuid === activeNote?.guid && pinMode != null);
+  let pinEditing = $derived(!!pinMode && pinGuid != null);
 
   function togglePreview() {
     toggleMarkdownPreviewForNoteType(noteType);
@@ -116,10 +117,6 @@
     pinGuid = null;
     pinDraft = '';
     pinError = '';
-  }
-
-  function attachResetPinEditor() {
-    if (pinGuid != null) cancelPinEditor();
   }
 
   function openPinEditor(mode) {
@@ -315,69 +312,65 @@
           </button>
         {/if}
       {/key}
-      {#key activeNote?.guid}
-        {#if pinEditing}
-          <div class="pin-editor flex items-center flex-shrink-0" transition:slide={pinSlide}>
-            <input
-              class="pin-input"
-              type="password"
-              inputmode="numeric"
-              autocomplete="one-time-code"
-              maxlength="6"
-              placeholder="PIN"
-              aria-label="Lock PIN"
-              value={pinDraft}
-              oninput={onPinInput}
-            />
-            <button type="button" class="toolbar-btn" onclick={cancelPinEditor}>Cancel</button>
-            {#if lockedOn && sessionUnlocked && (pinMode === 'relock' || pinMode === 'remove')}
-              <button
-                type="button"
-                class="toolbar-btn"
-                onclick={() => {
-                  pinMode = 'remove';
-                  pinError = '';
-                  if (pinDraft.length === 6) submitPin();
-                }}
-              >
-                Remove lock
-              </button>
-            {/if}
+      {#if pinEditing && pinGuid === activeNote?.guid}
+        <div class="pin-editor flex items-center flex-shrink-0" transition:slide={pinSlide}>
+          <input
+            class="pin-input"
+            type="password"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            maxlength="6"
+            placeholder="PIN"
+            aria-label="Lock PIN"
+            value={pinDraft}
+            oninput={onPinInput}
+          />
+          <button type="button" class="toolbar-btn" onclick={cancelPinEditor}>Cancel</button>
+          {#if lockedOn && sessionUnlocked && (pinMode === 'relock' || pinMode === 'remove')}
             <button
               type="button"
-              class="toolbar-btn accent"
-              onclick={submitPin}
-              disabled={pinDraft.length !== 6}
+              class="toolbar-btn"
+              onclick={() => {
+                pinMode = 'remove';
+                pinError = '';
+                if (pinDraft.length === 6) submitPin();
+              }}
             >
-              {pinActionLabel}
+              Remove lock
             </button>
-            {#if pinError}
-              <span class="pin-error">{pinError}</span>
-            {/if}
-          </div>
-        {:else}
+          {/if}
           <button
             type="button"
-            class="toolbar-btn flex-shrink-0 icon-btn"
-            class:active={lockedOn}
-            aria-label={lockedOn
-              ? sessionUnlocked
-                ? 'Lock note again'
-                : 'Unlock note'
-              : 'Lock note'}
-            title={lockedOn
-              ? sessionUnlocked
-                ? 'Lock again (PIN)'
-                : 'Unlock with PIN'
-              : 'Lock note with PIN'}
-            onclick={onLockClick}
-            {@attach attachResetPinEditor}
-            transition:slide={pinSlide}
+            class="toolbar-btn accent"
+            onclick={submitPin}
+            disabled={pinDraft.length !== 6}
           >
-            <Icon name="Lock" class="lock-icon" />
+            {pinActionLabel}
           </button>
-        {/if}
-      {/key}
+          {#if pinError}
+            <span class="pin-error">{pinError}</span>
+          {/if}
+        </div>
+      {:else}
+        <button
+          type="button"
+          class="toolbar-btn flex-shrink-0 icon-btn"
+          class:active={lockedOn}
+          aria-label={lockedOn
+            ? sessionUnlocked
+              ? 'Lock note again'
+              : 'Unlock note'
+            : 'Lock note'}
+          title={lockedOn
+            ? sessionUnlocked
+              ? 'Lock again (PIN)'
+              : 'Unlock with PIN'
+            : 'Lock note with PIN'}
+          onclick={onLockClick}
+        >
+          <Icon name="Lock" class="lock-icon" />
+        </button>
+      {/if}
       {#if canSticky}
         <button
           type="button"
