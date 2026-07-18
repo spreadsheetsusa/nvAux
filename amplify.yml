@@ -3,9 +3,12 @@ frontend:
   phases:
     preBuild:
       commands:
-        - bun i
+        - curl -fsSL https://bun.sh/install | bash
+        - export PATH="$HOME/.bun/bin:$PATH"
+        - bun i --frozen-lockfile
     build:
       commands:
+        - export PATH="$HOME/.bun/bin:$PATH"
         - bun run build
   artifacts:
     baseDirectory: dist
@@ -14,3 +17,4 @@ frontend:
   cache:
     paths:
       - node_modules/**/*
+      - ~/.bun/install/cache/**/*
