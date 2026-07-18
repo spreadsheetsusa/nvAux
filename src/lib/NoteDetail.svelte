@@ -22,12 +22,27 @@
   import yaml from 'highlight.js/lib/languages/yaml';
   import 'highlight.js/styles/github-dark.css';
 
-  import { selectedNote, bodyText, markdownPreview, mediaPlayerHeight } from './store';
+  import {
+    selectedNote,
+    bodyText,
+    markdownPreview,
+    db,
+    openNoteByName,
+  } from './store';
 
   import { debounce } from '../utils/debounce';
   import { isEmptyObject } from '../utils/isEmptyObject';
+  import {
+    getOpenWikiQuery,
+    toWikiPreviewMarkdown,
+    parseWikiHref,
+    filterWikiSuggestions,
+    applyWikiCompletion,
+    getTextareaCaretOffset,
+  } from '../utils/wikiLinks';
 
   import Settings from './Settings.svelte';
+  import WikiLinkSuggest from './WikiLinkSuggest.svelte';
 
   hljs.registerLanguage('bash', bash);
   hljs.registerLanguage('c', c);
@@ -78,17 +93,167 @@
 
   let showPreview = $derived(canPreview && $markdownPreview);
 
-  let previewHtml = $derived(showPreview ? marked.parse($bodyText || '') : '');
+  let previewHtml = $derived(
+    showPreview ? marked.parse(toWikiPreviewMarkdown($bodyText || '')) : ''
+  );
 
   let innerWidth = $state();
   let innerHeight = $state();
+
+  /** @type {HTMLTextAreaElement | undefined} */
+  let editorEl = $state();
+
+  let wikiVisible = $state(false);
+  let wikiStart = $state(0);
+  /** @type {string[]} */
+  let wikiCandidates = $state([]);
+  let wikiSelectedIndex = $state(0);
+  let wikiLeft = $state(0);
+  let wikiTop = $state(0);
+
+  /** Cached note titles while an open [[…]] span is active. */
+  /** @type {string[] | null} */
+  let wikiNameCache = null;
+  let wikiSyncSeq = 0;
+
+  function dismissWikiSuggest() {
+    wikiSyncSeq += 1;
+    wikiVisible = false;
+    wikiCandidates = [];
+    wikiSelectedIndex = 0;
+    wikiNameCache = null;
+  }
+
+  async function ensureWikiNameCache() {
+    if (wikiNameCache) return wikiNameCache;
+    const database = await db();
+    const docs = await database.notes.find().exec();
+    wikiNameCache = docs.map((n) => n.name).filter(Boolean);
+    return wikiNameCache;
+  }
+
+  async function syncWikiSuggest() {
+    if (!editorEl || showPreview) {
+      dismissWikiSuggest();
+      return;
+    }
+
+    const cursor = editorEl.selectionStart ?? 0;
+    const open = getOpenWikiQuery($bodyText || '', cursor);
+    if (!open) {
+      dismissWikiSuggest();
+      return;
+    }
+
+    const seq = ++wikiSyncSeq;
+    wikiStart = open.start;
+
+    const names = await ensureWikiNameCache();
+    if (seq !== wikiSyncSeq) return;
+
+    wikiCandidates = filterWikiSuggestions(names, open.query);
+    wikiSelectedIndex = 0;
+
+    if (wikiCandidates.length === 0) {
+      wikiVisible = false;
+      return;
+    }
+
+    const caret = getTextareaCaretOffset(editorEl, cursor);
+    const shell = editorEl.parentElement;
+    const shellRect = shell?.getBoundingClientRect();
+    const editorRect = editorEl.getBoundingClientRect();
+    const offsetLeft = editorRect.left - (shellRect?.left ?? editorRect.left);
+    const offsetTop = editorRect.top - (shellRect?.top ?? editorRect.top);
+
+    wikiLeft = Math.max(8, offsetLeft + caret.left);
+    wikiTop = Math.max(8, offsetTop + caret.top + caret.height + 4);
+    wikiVisible = true;
+  }
+
+  function acceptWikiSuggestion(name) {
+    if (!editorEl || !name) return;
+    const cursor = editorEl.selectionStart ?? 0;
+    const { text, cursor: nextCursor } = applyWikiCompletion(
+      $bodyText || '',
+      wikiStart,
+      cursor,
+      name
+    );
+    bodyText.set(text);
+    dismissWikiSuggest();
+    queueMicrotask(() => {
+      if (!editorEl) return;
+      editorEl.focus();
+      editorEl.setSelectionRange(nextCursor, nextCursor);
+      handleDebounceSave();
+    });
+  }
+
+  function handleEditorInput() {
+    handleDebounceSave();
+    syncWikiSuggest();
+  }
+
+  function handleEditorKeyup(e) {
+    if (
+      e.key === 'ArrowLeft' ||
+      e.key === 'ArrowRight' ||
+      e.key === 'Home' ||
+      e.key === 'End'
+    ) {
+      syncWikiSuggest();
+    }
+  }
+
+  function handleEditorKeydown(e) {
+    if (!wikiVisible || wikiCandidates.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      wikiSelectedIndex = (wikiSelectedIndex + 1) % wikiCandidates.length;
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      wikiSelectedIndex =
+        (wikiSelectedIndex - 1 + wikiCandidates.length) % wikiCandidates.length;
+      return;
+    }
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      acceptWikiSuggestion(wikiCandidates[wikiSelectedIndex]);
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      dismissWikiSuggest();
+    }
+  }
+
+  function handleEditorClick() {
+    syncWikiSuggest();
+  }
+
+  function handleEditorBlur() {
+    // Delay so mousedown on a suggestion can fire first.
+    setTimeout(() => dismissWikiSuggest(), 150);
+  }
+
+  function handlePreviewClick(e) {
+    const anchor = e.target?.closest?.('a[href^="#wiki:"]');
+    if (!anchor) return;
+    e.preventDefault();
+    const title = parseWikiHref(anchor.getAttribute('href'));
+    if (title) openNoteByName(title);
+  }
 </script>
 
 <div
   bind:clientWidth={innerWidth}
   bind:clientHeight={innerHeight}
   class="note-detail relative flex flex-col flex-1 min-h-0 overflow-hidden border-box"
-  style="background: var(--app-notedetail-background); margin-bottom: {35 + $mediaPlayerHeight}px;"
+  style="background: var(--app-notedetail-background); margin-bottom: 35px;"
 >
   {#if isEmptyObject($selectedNote)}
     <div class="empty-state flex-1 min-h-0 w-full flex items-center justify-center">
@@ -99,17 +264,39 @@
       <Settings />
     </div>
   {:else if showPreview}
-    <div class="markdown-preview thin-scrollbar flex-1 min-h-0 overflow-y-auto">
+    <!-- Event delegation for [[wiki]] anchors inside {@html} preview -->
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="markdown-preview thin-scrollbar flex-1 min-h-0 overflow-y-auto"
+      onclick={handlePreviewClick}
+    >
       {@html previewHtml}
     </div>
   {:else}
     <div class="editor-shell relative flex-1 min-h-0 overflow-hidden">
       <textarea
         id="body-editor"
+        bind:this={editorEl}
         class="body-editor thin-scrollbar absolute inset-0 w-full h-full overflow-y-auto block no-resize border-0 outline-none border-box bg-transparent"
         bind:value={$bodyText}
-        onkeyup={handleDebounceSave}
+        oninput={handleEditorInput}
+        onkeydown={handleEditorKeydown}
+        onkeyup={handleEditorKeyup}
+        onclick={handleEditorClick}
+        onblur={handleEditorBlur}
       ></textarea>
+      <WikiLinkSuggest
+        candidates={wikiCandidates}
+        selectedIndex={wikiSelectedIndex}
+        left={wikiLeft}
+        top={wikiTop}
+        visible={wikiVisible}
+        onSelect={acceptWikiSuggestion}
+        onHover={(i) => {
+          wikiSelectedIndex = i;
+        }}
+      />
     </div>
   {/if}
 </div>

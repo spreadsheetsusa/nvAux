@@ -1,4 +1,5 @@
 import { writable } from 'svelte/store';
+import { v4 as uuidv4 } from 'uuid';
 
 import { addRxPlugin, createRxDatabase } from 'rxdb';
 import { getRxStorageDexie } from 'rxdb/plugins/storage-dexie';
@@ -165,7 +166,7 @@ export const birthDate = writable(storedBirthDate);
 export const expectedLongevity = writable(storedExpectedLongevity);
 export const lifeCalendarStat = writable(storedLifeCalendarStat);
 export const LIFE_CALENDAR_STAT_MODES = LIFE_CALENDAR_STATS;
-/** Height of the media player bar above the StatusBar (0 when hidden). */
+/** Height of the media player bar under the Omnibar (0 when hidden). */
 export const mediaPlayerHeight = writable(0);
 
 /**
@@ -181,6 +182,33 @@ export async function selectNoteByGuid(guid) {
   if (!note) return null;
   selectedNote.set(note);
   bodyText.set(note.body ?? '');
+  return note;
+}
+
+/**
+ * Open a note by exact title (name), creating it if missing.
+ * Does not alter omniText / filter mode.
+ * @param {string} name
+ * @returns {Promise<object | null>}
+ */
+export async function openNoteByName(name) {
+  const trimmed = (name || '').trim();
+  if (!trimmed) return null;
+  const database = await db();
+  const existing = await database.notes
+    .findOne({ selector: { name: trimmed } })
+    .exec();
+  if (existing) {
+    return selectNoteByGuid(existing.guid);
+  }
+  const note = await database.notes.insert({
+    guid: uuidv4(),
+    name: trimmed,
+    createdAt: new Date().getTime(),
+    updatedAt: new Date().getTime(),
+  });
+  selectedNote.set(note);
+  bodyText.set('');
   return note;
 }
 
