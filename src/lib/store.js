@@ -1,4 +1,4 @@
-import { writable } from 'svelte/store';
+import { writable, get } from 'svelte/store';
 import { v4 as uuidv4 } from 'uuid';
 
 import { addRxPlugin, createRxDatabase } from 'rxdb';
@@ -185,10 +185,25 @@ export const mediaPlayerHeight = writable(0);
  */
 export const notePopups = writable([]);
 
+/** Z-order for the main App Windowed card (competes with note popups). */
+export const mainWindowZIndex = writable(10);
+
 const POPUP_DEFAULT_W = 420;
 const POPUP_DEFAULT_H = 320;
 const POPUP_CASCADE = 28;
-let notePopupZCounter = 40;
+/** Shared front-to-back counter for main window + note popups (macOS-style). */
+let windowStackZ = 10;
+
+function nextWindowZ() {
+  windowStackZ += 1;
+  return windowStackZ;
+}
+
+/** Bring the main app window above all note popups. */
+export function raiseMainWindow() {
+  if (get(mainWindowZIndex) === windowStackZ) return;
+  mainWindowZIndex.set(nextWindowZ());
+}
 
 /**
  * Open a floating note popup for guid (App Windowed). One per guid — reopens raise existing.
@@ -201,12 +216,12 @@ export function openNotePopup(guid) {
     const existing = list.find((p) => p.guid === guid);
     if (existing) {
       raised = true;
-      notePopupZCounter += 1;
+      const z = nextWindowZ();
       return list.map((p) =>
-        p.id === existing.id ? { ...p, zIndex: notePopupZCounter } : p
+        p.id === existing.id ? { ...p, zIndex: z } : p
       );
     }
-    notePopupZCounter += 1;
+    const z = nextWindowZ();
     const index = list.length;
     const width = POPUP_DEFAULT_W;
     const height = POPUP_DEFAULT_H;
@@ -227,7 +242,7 @@ export function openNotePopup(guid) {
         top,
         width,
         height,
-        zIndex: notePopupZCounter,
+        zIndex: z,
       },
     ];
   });
@@ -244,16 +259,16 @@ export function closeAllNotePopups() {
   notePopups.set([]);
 }
 
-/** @param {string} id */
+/** Bring a note popup above the main window and all other popups. */
 export function raiseNotePopup(id) {
   if (!id) return;
   notePopups.update((list) => {
     const target = list.find((p) => p.id === id);
     if (!target) return list;
-    notePopupZCounter += 1;
-    return list.map((p) =>
-      p.id === id ? { ...p, zIndex: notePopupZCounter } : p
-    );
+    // Already the global frontmost window — skip store churn mid-drag.
+    if (target.zIndex === windowStackZ) return list;
+    const z = nextWindowZ();
+    return list.map((p) => (p.id === id ? { ...p, zIndex: z } : p));
   });
 }
 
@@ -317,9 +332,30 @@ export async function openNoteByName(name) {
     createdAt: new Date().getTime(),
     updatedAt: new Date().getTime(),
   });
+  invalidateWikiNoteNames();
   selectedNote.set(note);
   bodyText.set('');
   return note;
+}
+
+/** @type {string[] | null} */
+let wikiNoteNamesCache = null;
+
+/** Drop cached note titles (call after create / rename / delete). */
+export function invalidateWikiNoteNames() {
+  wikiNoteNamesCache = null;
+}
+
+/**
+ * Note titles for wiki-link autocomplete. Cached until invalidated.
+ * @returns {Promise<string[]>}
+ */
+export async function getWikiNoteNames() {
+  if (wikiNoteNamesCache) return wikiNoteNamesCache;
+  const database = await db();
+  const docs = await database.notes.find().exec();
+  wikiNoteNamesCache = docs.map((n) => n.name).filter(Boolean);
+  return wikiNoteNamesCache;
 }
 
 omniText.subscribe(v => {

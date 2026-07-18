@@ -6,7 +6,18 @@
   import IconXcircle from './IconXcircle.svelte';
   import IconSidebar from './IconSidebar.svelte';
 
-  import { omniMode, omniText, selectedNote, db, bodyText, sidebarOpen, fullScreen, windowed, showClock } from './store';
+  import {
+    omniMode,
+    omniText,
+    selectedNote,
+    db,
+    bodyText,
+    sidebarOpen,
+    fullScreen,
+    windowed,
+    showClock,
+    invalidateWikiNoteNames,
+  } from './store';
 
   let omniInput = $state();
   let time = $state(new Date());
@@ -67,6 +78,7 @@
             updatedAt: new Date().getTime(),
           })
           .then((note) => {
+            invalidateWikiNoteNames();
             selectedNote.set(note);
             omniMode.set('edit');
             bodyText.set('');

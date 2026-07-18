@@ -9,6 +9,7 @@
   import AudioPlayer from './lib/AudioPlayer.svelte';
   import Sidebar from './lib/Sidebar.svelte';
   import NotePopupWindow from './lib/NotePopupWindow.svelte';
+  import DemoMarketing from './lib/DemoMarketing.svelte';
 
   import {
     fullScreen,
@@ -20,6 +21,8 @@
     notePopups,
     closeAllNotePopups,
     showStatusBar,
+    mainWindowZIndex,
+    raiseMainWindow,
   } from './lib/store';
   import { windowFrame } from './utils/windowFrame';
 
@@ -97,8 +100,22 @@
   });
 </script>
 
-<div class="h-screen w-screen overflow-hidden flex flex-col justify-center items-center transition-all {isAppFullscreen ? '' : 'p-2'}">
-
+<div
+  class="w-screen flex flex-col items-center transition-all {isDemo
+    ? 'min-h-screen overflow-y-auto'
+    : 'h-screen overflow-hidden justify-center'} {isAppFullscreen ? '' : 'p-2'}"
+>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="w-full flex flex-col justify-center items-center"
+    class:demo-stage={isDemo}
+    class:h-full={!isDemo}
+    class:app-window-stage={isAppWindowed}
+    style:z-index={isAppWindowed ? $mainWindowZIndex : undefined}
+    onpointerdown={() => {
+      if (isAppWindowed) raiseMainWindow();
+    }}
+  >
     <div
       class="demo-hero transition-all text-center"
       class:demo-hero-visible={isDemo}
@@ -110,33 +127,38 @@
       <p>Capture and retrieve ideas at the speed of thought with nvAux, the in-the-zone note-taking app for creative professionals.</p>
     </div>
 
-  <main
-    use:windowFrame={{ enabled: isAppWindowed, threshold: 2 }}
-    class="{isAppFullscreen ? 'fullscreen' : 'windowed'} relative overflow-hidden flex transition-all"
-    class:sidebar-open={$sidebarOpen}
-    style="background-color: var(--app-background); --sidebar-width: {$sidebarWidth}px;"
-  >
-    <Sidebar />
-    <div
-      class="main-content relative flex flex-col flex-grow overflow-hidden min-w-0 min-h-0 h-full"
-      bind:this={mainContent}
+    <main
+      use:windowFrame={{ enabled: isAppWindowed, threshold: 2 }}
+      class="{isAppFullscreen ? 'fullscreen' : 'windowed'} relative overflow-hidden flex transition-all"
+      class:sidebar-open={$sidebarOpen}
+      style="background-color: var(--app-background); --sidebar-width: {$sidebarWidth}px;"
     >
-      <OmniBar />
-      <AudioPlayer />
-      <NoteList />
-      <ResizeHandle
-        orientation="vertical"
-        bind:value={$noteListHeight}
-        min={NOTE_LIST_MIN_PX}
-        getMax={getNoteListMax}
-        ariaLabel="Resize note list"
-      />
-      <NoteDetail />
-      {#if $showStatusBar}
-        <StatusBar />
-      {/if}
-    </div>
-  </main>
+      <Sidebar />
+      <div
+        class="main-content relative flex flex-col flex-grow overflow-hidden min-w-0 min-h-0 h-full"
+        bind:this={mainContent}
+      >
+        <OmniBar />
+        <AudioPlayer />
+        <NoteList />
+        <ResizeHandle
+          orientation="vertical"
+          bind:value={$noteListHeight}
+          min={NOTE_LIST_MIN_PX}
+          getMax={getNoteListMax}
+          ariaLabel="Resize note list"
+        />
+        <NoteDetail />
+        {#if $showStatusBar}
+          <StatusBar />
+        {/if}
+      </div>
+    </main>
+  </div>
+
+  {#if isDemo}
+    <DemoMarketing />
+  {/if}
 
   {#if isAppWindowed}
     {#each $notePopups as popup (popup.id)}
@@ -178,6 +200,12 @@
     overflow: hidden;
     pointer-events: none;
   }
+  /* First viewport in Demo: fill the shell under p-2 so main.windowed 50% resolves. */
+  .demo-stage {
+    min-height: calc(100dvh - 1rem);
+    height: calc(100dvh - 1rem);
+    flex-shrink: 0;
+  }
   /* Fullscreen size lives in CSS (not the style attr) so windowFrame reset
      can clear resize overrides without wiping the tween target. */
   main.fullscreen {
@@ -202,6 +230,10 @@
   }
   main.windowed.sidebar-open {
     max-width: calc(690px + var(--sidebar-width, 443px));
+  }
+  /* Stacking peer of note popups — z-index set from mainWindowZIndex. */
+  .app-window-stage {
+    position: relative;
   }
   .main-content {
     z-index: 1;

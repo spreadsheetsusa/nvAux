@@ -11,14 +11,22 @@
     fullScreen,
     windowed,
     openNotePopup,
+    invalidateWikiNoteNames,
   } from './store';
+  import { escapeRegExp } from '../utils/escapeRegExp';
   import FileListItemContextMenu from './FileListItemContextMenu.svelte';
+
+  const BODY_PREVIEW_LEN = 100;
+  const SEARCH_DEBOUNCE_MS = 150;
 
   let isAppWindowed = $derived($fullScreen && $windowed);
 
   let db$ = $state(null);
   let isMouseDown = $state(false);
-  let notes = $state([]);
+  /** @type {any[]} */
+  let notes = $state.raw([]);
+  /** Debounced Omnibar text used for the RxDB subscription. */
+  let queryText = $state('');
 
   let showContextMenu = $state(false);
   let contextMenuNote = $state(null);
@@ -27,6 +35,9 @@
 
   let renamingGuid = $state(null);
   let renameValue = $state('');
+
+  /** @type {Map<number | string, string>} */
+  const dateLabelCache = new Map();
 
   function handleClickOutside(event) {
     if (showContextMenu && !event.target.closest('.context-menu')) {
@@ -43,35 +54,60 @@
     document.removeEventListener('click', handleClickOutside);
   });
 
+  // Debounce Omnibar → query (input stays immediate; RxDB resubscribes after pause).
+  $effect(() => {
+    const text = $omniText;
+    const timeoutId = window.setTimeout(() => {
+      queryText = text;
+    }, SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timeoutId);
+  });
+
   $effect(() => {
     const database = db$;
-    const queryText = $omniText;
+    const q = queryText;
 
     if (!database) return;
 
-    const subscription = database.notes
-      .find({
-        selector: {
-          $or: [
-            { name: { $regex: `.*${queryText}.*` } },
-            { body: { $regex: `.*${queryText}.*` } },
-          ],
-        },
-        sort: [{ updatedAt: 'desc' }],
-      })
-      .$.subscribe((results) => {
-        notes = results;
-      });
+    const sort = [{ updatedAt: 'desc' }];
+    const trimmed = (q || '').trim();
+    const pattern = trimmed ? `.*${escapeRegExp(trimmed)}.*` : '';
+    const query = trimmed
+      ? database.notes.find({
+          selector: {
+            $or: [{ name: { $regex: pattern } }, { body: { $regex: pattern } }],
+          },
+          sort,
+        })
+      : database.notes.find({ sort });
+
+    const subscription = query.$.subscribe((results) => {
+      notes = results;
+    });
 
     return () => subscription.unsubscribe();
   });
 
-  const formatDate = (str) => formatDistanceToNow(new Date(str).getTime(), { addSuffix: true });
+  const formatDate = (str) => {
+    const cached = dateLabelCache.get(str);
+    if (cached) return cached;
+    const label = formatDistanceToNow(new Date(str).getTime(), { addSuffix: true });
+    dateLabelCache.set(str, label);
+    return label;
+  };
+
+  /** @param {string | null | undefined} body */
+  const bodyPreview = (body) => {
+    if (!body) return '';
+    return body.length > BODY_PREVIEW_LEN ? body.slice(0, BODY_PREVIEW_LEN) : body;
+  };
+
   const handleSelectNoteMouseOver = (note) => isMouseDown && handleSelectNote(note);
 
   const handleDeleteNote = async (noteToDelete) => {
     const database = await db();
     await database.notes.findOne({ selector: { guid: noteToDelete.guid } }).remove();
+    invalidateWikiNoteNames();
     notes = notes.filter((n) => n.guid !== noteToDelete.guid);
     showContextMenu = false;
   };
@@ -164,6 +200,7 @@
         data.updatedAt = new Date().getTime();
         return data;
       });
+      invalidateWikiNoteNames();
 
       if ($selectedNote?.guid === guid) {
         selectedNote.set(note);
@@ -211,7 +248,7 @@
       style={selectedGuid === note.guid && 'background: #2252a0; color: white;'}
     >
       <span
-        class="elipsis"
+        class="elipsis min-w-0 flex-grow"
         role="button"
         aria-label="Note Preview"
         tabindex="-1"
@@ -237,21 +274,21 @@
           />
         {:else}
           {note.name}
-          {#if note.body !== ''}<span style="color: #505050">—</span>{/if}
+          {#if note.body}<span style="color: #505050">—</span>{/if}
           <span class="mute" style={selectedGuid === note.guid && 'color: #fff;'}>
-            {note.body ?? ''}
+            {bodyPreview(note.body)}
           </span>
         {/if}
       </span>
 
-      <span class="meta flex items-center truncate" style={selectedGuid === note.guid && 'background: #2252a0; color: white;'}>
-        {formatDate(note.updatedAt)}
+      <span class="meta flex items-center flex-shrink-0" style={selectedGuid === note.guid && 'background: #2252a0; color: white;'}>
+        <span class="truncate">{formatDate(note.updatedAt)}</span>
         <button
           type="button"
           aria-label="Note options"
           onclick={(event) => handleContextMenu(event, note)}
-          class="bg-transparent flex items-center"
-          style="margin-left: 5px; color: {selectedGuid === note.guid ? '#ffffff42' : '#7e848c66'};"
+          class="note-options bg-transparent flex items-center flex-shrink-0"
+          style="margin-left: 5px; color: {selectedGuid === note.guid ? '#ffffffa0' : '#7e848c'};"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-more-vertical"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
         </button>
@@ -304,6 +341,12 @@
     color: #43484f;
     text-align: right;
     font-size: 13px;
+    max-width: 45%;
+  }
+  .note-options {
+    width: 16px;
+    height: 16px;
+    justify-content: center;
   }
   .mute {
     color: #65676c;

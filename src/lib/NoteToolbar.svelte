@@ -10,7 +10,7 @@
     mediaAddNext,
     mediaAddLast,
     mediaPlayNow,
-    soundcloudUrlsFrom,
+    hasSoundCloudLinks,
   } from './mediaSession';
 
   const SETTINGS_GUID = '00000000-0000-0000-0000-000000000000';
@@ -30,9 +30,7 @@
       activeNote.guid !== SETTINGS_GUID
   );
 
-  let hasSoundCloud = $derived(
-    canPreview && soundcloudUrlsFrom(activeBody).length > 0
-  );
+  let hasSoundCloud = $derived(canPreview && hasSoundCloudLinks(activeBody));
 
   function togglePreview() {
     markdownPreview.update((v) => !v);

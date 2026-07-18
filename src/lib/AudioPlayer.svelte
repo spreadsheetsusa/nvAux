@@ -64,6 +64,18 @@
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
+  /** @param {string} url */
+  function shortUrl(url) {
+    return url.replace(/^https?:\/\/(www\.)?/, '');
+  }
+
+  /** @param {{ url?: string, label?: string } | null | undefined} track */
+  function trackPrimaryLabel(track) {
+    if (!track) return '';
+    if (track.label) return track.label;
+    return track.url ? shortUrl(track.url) : '';
+  }
+
   let playlist = $derived($mediaPlaylist);
   let trackIndex = $derived($mediaTrackIndex);
   let currentTrack = $derived(playlist[trackIndex] ?? null);
@@ -88,13 +100,30 @@
   /** When true, play after the next successful load (prev/next / auto-advance / Play Now). */
   let playAfterLoad = false;
 
-  let title = $state('');
+  /** oEmbed title for bare-URL tracks (skipped when markdown label is present). */
+  let oembedTitle = $state('');
   let isPlaying = $state(false);
   let positionMs = $state(0);
   let durationMs = $state(0);
   let volume = $state(80);
   let ready = $state(false);
   let seeking = $state(false);
+
+  let trackPart = $derived(
+    currentTrack?.label || oembedTitle || (currentUrl ? shortUrl(currentUrl) : '')
+  );
+  let displayTitle = $derived.by(() => {
+    const note = sourceNoteName;
+    const track = trackPart;
+    if (note && track) return `${note} · ${track}`;
+    return note || track || '';
+  });
+
+  /** @type {HTMLDivElement | null} */
+  let marqueeEl = $state(null);
+  /** @type {HTMLSpanElement | null} */
+  let marqueeMeasureEl = $state(null);
+  let marqueeScrolling = $state(false);
 
   let currentLabel = $derived(formatTime(positionMs));
   let durationLabel = $derived(formatTime(durationMs));
@@ -122,25 +151,52 @@
 
   $effect(() => {
     const url = currentUrl;
+    const label = currentTrack?.label;
     if (!url) {
-      title = '';
+      oembedTitle = '';
+      return;
+    }
+    // Prefer markdown link text; skip oEmbed when we already have a label.
+    if (label) {
+      oembedTitle = '';
       return;
     }
 
     let cancelled = false;
+    oembedTitle = '';
     fetch(`https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(url)}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (cancelled || !data) return;
-        title = data.title || '';
+        oembedTitle = data.title || '';
       })
       .catch(() => {
-        if (!cancelled) title = '';
+        if (!cancelled) oembedTitle = '';
       });
 
     return () => {
       cancelled = true;
     };
+  });
+
+  // Overflow-aware marquee: scroll only when the combined title doesn't fit.
+  $effect(() => {
+    const text = displayTitle;
+    const el = marqueeEl;
+    const measure = marqueeMeasureEl;
+    if (!el || !measure || !text) {
+      marqueeScrolling = false;
+      return;
+    }
+
+    const update = () => {
+      marqueeScrolling = measure.scrollWidth > el.clientWidth + 1;
+    };
+
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
   });
 
   function bindWidgetEvents(activeWidget) {
@@ -380,7 +436,7 @@
       class="audio-player px-2 flex items-center gap-2 w-full"
       style="height: {PLAYER_HEIGHT}px; background: var(--app-statusbar-background); border-bottom: 1px solid var(--app-statusbar-border); color: #8a8a8a;"
       role="region"
-      aria-label={title ? `Audio player: ${title}` : 'Audio player'}
+      aria-label={displayTitle ? `Audio player: ${displayTitle}` : 'Audio player'}
     >
       <iframe
         bind:this={iframeEl}
@@ -467,8 +523,28 @@
         <span class="track-count flex-shrink-0" aria-label="Track">{trackLabel}</span>
       {/if}
 
-      {#if title}
-        <span class="track-title min-w-0 truncate" title={title}>{title}</span>
+      {#if displayTitle}
+        <div
+          class="track-title marquee min-w-0"
+          class:scrolling={marqueeScrolling}
+          bind:this={marqueeEl}
+          title={displayTitle}
+          style={marqueeScrolling
+            ? `--marquee-duration: ${Math.max(10, displayTitle.length * 0.35)}s`
+            : undefined}
+        >
+          <span class="marquee-measure" bind:this={marqueeMeasureEl} aria-hidden="true">
+            {displayTitle}
+          </span>
+          <div class="marquee-viewport">
+            <div class="marquee-track">
+              <span class="marquee-text">{displayTitle}</span>
+              {#if marqueeScrolling}
+                <span class="marquee-text" aria-hidden="true">{displayTitle}</span>
+              {/if}
+            </div>
+          </div>
+        </div>
       {/if}
 
       <span class="time flex-shrink-0" aria-label="Current time">{currentLabel}</span>
@@ -589,8 +665,8 @@
               class="playlist-main min-w-0 flex-grow flex flex-col items-start"
               onclick={() => onRowPlay(index)}
             >
-              <span class="playlist-url truncate w-full" title={track.url}>
-                {track.url.replace(/^https?:\/\/(www\.)?/, '')}
+              <span class="playlist-url truncate w-full" title={track.label || track.url}>
+                {trackPrimaryLabel(track)}
               </span>
               <span class="playlist-note truncate w-full" title={track.noteName}>
                 {track.noteName}
@@ -714,8 +790,47 @@
   }
 
   .track-title {
-    flex: 0 1 12em;
+    flex: 0 1 14em;
     color: #a0a0a0;
+    position: relative;
+    overflow: hidden;
+    min-width: 4em;
+  }
+
+  .marquee-measure {
+    position: absolute;
+    visibility: hidden;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
+  .marquee-viewport {
+    overflow: hidden;
+    width: 100%;
+  }
+
+  .marquee-track {
+    display: inline-flex;
+    white-space: nowrap;
+    will-change: transform;
+  }
+
+  .marquee.scrolling .marquee-text {
+    padding-right: 2.5em;
+  }
+
+  .marquee.scrolling .marquee-track {
+    animation: marquee-scroll linear infinite;
+    animation-duration: var(--marquee-duration, 12s);
+  }
+
+  @keyframes marquee-scroll {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
   }
 
   .time {

@@ -1,6 +1,15 @@
 <script>
   import { differenceInYears } from 'date-fns';
-  import { db, windowed, showClock, showStatusBar, fullScreen, birthDate, expectedLongevity } from './store';
+  import {
+    db,
+    windowed,
+    showClock,
+    showStatusBar,
+    fullScreen,
+    birthDate,
+    expectedLongevity,
+    invalidateWikiNoteNames,
+  } from './store';
 
   import DownloadNotesZip from './DownloadNotesZip.svelte';
   import ImportNotesZip from './ImportNotesZip.svelte';
@@ -39,6 +48,7 @@
     // db$.notes.destroy();
     localStorage.clear();
     db$.notes.remove();
+    invalidateWikiNoteNames();
     location.reload();
   };
 </script>

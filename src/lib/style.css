@@ -40,6 +40,7 @@ html, body { margin: 0; padding: 0; font-family: Verdana, Geneva, Tahoma, sans-s
 .justify-end { justify-content: flex-end; }
 .m-1\.5 { margin: 0.375rem; }
 .min-h-0 { min-height: 0; }
+.min-h-screen { min-height: 100dvh; }
 .min-w-0 { min-width: 0; }
 .no-resize { resize: none; }
 .outline-none { outline: none; }
