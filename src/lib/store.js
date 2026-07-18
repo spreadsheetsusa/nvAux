@@ -5,6 +5,7 @@ import { addRxPlugin, createRxDatabase } from 'rxdb';
 import { getRxStorageDexie } from 'rxdb/plugins/storage-dexie';
 
 import { schema } from './schema';
+import { applyAccentGradient } from '../utils/accentGradient';
 
 /**
  * State that persists to localStorage =========================================
@@ -28,7 +29,7 @@ const storedGraphViewHeight = localStorage.getItem('graphViewHeight') || 260;
 const storedGraphViewOpen = readStoredBool('graphViewOpen', false);
 const storedGraphViewZoom = (() => {
   const raw = Number(localStorage.getItem('graphViewZoom'));
-  return Number.isFinite(raw) ? Math.min(2.5, Math.max(0.4, raw)) : 1;
+  return Number.isFinite(raw) ? Math.min(8, Math.max(0.35, raw)) : 1;
 })();
 
 const storedFullScreen = readStoredBool('fullScreen', false);
@@ -258,10 +259,24 @@ export const LIFE_CALENDAR_STAT_MODES = LIFE_CALENDAR_STATS;
 export const accentColor = writable(storedAccentColor);
 
 accentColor.subscribe((v) => {
-  if (typeof document !== 'undefined') {
-    document.documentElement.style.setProperty('--app-accent', normalizeAccentColor(v));
-  }
+  if (typeof document === 'undefined') return;
+  const hex = normalizeAccentColor(v);
+  document.documentElement.style.setProperty('--app-accent', hex);
+  applyAccentGradient(hex);
 });
+
+// Re-seed gradient when light/dark preference flips.
+if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+  const schemeMq = window.matchMedia('(prefers-color-scheme: dark)');
+  const onSchemeChange = () => {
+    applyAccentGradient(normalizeAccentColor(get(accentColor)));
+  };
+  if (typeof schemeMq.addEventListener === 'function') {
+    schemeMq.addEventListener('change', onSchemeChange);
+  } else if (typeof schemeMq.addListener === 'function') {
+    schemeMq.addListener(onSchemeChange);
+  }
+}
 /** Height of the media player bar under the Omnibar (0 when hidden). */
 export const mediaPlayerHeight = writable(0);
 

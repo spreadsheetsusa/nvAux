@@ -9,7 +9,8 @@
   import AudioPlayer from './lib/AudioPlayer.svelte';
   import Sidebar from './lib/Sidebar.svelte';
   import NotePopupWindow from './lib/NotePopupWindow.svelte';
-  import DemoMarketing from './lib/DemoMarketing.svelte';
+  import DemoMarketing from './lib/components/marketing/DemoMarketing.svelte';
+  import DemoAccentPresets from './lib/components/marketing/DemoAccentPresets.svelte';
 
   import {
     fullScreen,
@@ -105,13 +106,14 @@
 
 <div
   class="w-screen flex flex-col items-center transition-all {isDemo
-    ? 'min-h-screen overflow-y-auto'
+    ? 'h-screen overflow-y-auto'
     : 'h-screen overflow-hidden justify-center'} {isAppFullscreen ? '' : 'p-2'}"
 >
   <div
-    class="w-full flex flex-col justify-center items-center"
+    class="w-full flex flex-col items-center"
     class:demo-stage={isDemo}
     class:h-full={!isDemo}
+    class:justify-center={!isDemo}
   >
     <div
       class="demo-hero transition-all text-center"
@@ -122,6 +124,7 @@
         <h1 style="opacity: 0.9; text-shadow: 1px 3px 5px rgba(0,0,0,0.5); transform: rotateX(6deg) rotateY(0deg); transform-style: preserve-3d;">nvAux</h1>
       </div>
       <p>Capture and retrieve ideas at the speed of thought with nvAux, the in-the-zone note-taking app for creative professionals.</p>
+      <DemoAccentPresets />
     </div>
 
     {#if $isMobile && $sidebarOpen}
@@ -141,6 +144,7 @@
     <main
       use:windowFrame={{ enabled: isAppWindowed, threshold: 2 }}
       class="{isAppFullscreen ? 'fullscreen' : 'windowed'} relative overflow-hidden flex transition-all"
+      class:demo-window={isDemo}
       class:sidebar-open={layoutSidebarOpen}
       style="background-color: var(--app-background); --sidebar-width: {$sidebarWidth}px;"
       style:z-index={isAppWindowed ? $mainWindowZIndex : undefined}
@@ -198,7 +202,7 @@
     line-height: 0;
     font-weight: 600;
     font-family:Arial, Helvetica, sans-serif;
-    margin-bottom: 50px;
+    margin-bottom: 52px;
   }
   p {
     max-width: 540px;
@@ -209,7 +213,7 @@
   }
   .demo-hero-visible {
     opacity: 1;
-    height: 200px;
+    height: 248px;
   }
   .demo-hero-hidden {
     opacity: 0;
@@ -217,11 +221,24 @@
     overflow: hidden;
     pointer-events: none;
   }
-  /* First viewport in Demo: fill the shell under p-2 so main.windowed 50% resolves. */
+  /* Demo only: pin hero+app near the top; stage sizes to content (not a short viewport). */
   .demo-stage {
-    min-height: calc(100dvh - 1rem);
-    height: calc(100dvh - 1rem);
     flex-shrink: 0;
+    justify-content: flex-start;
+    padding-top: 2.75rem;
+    padding-bottom: 5rem;
+    gap: 1rem;
+    height: auto;
+    min-height: 0;
+  }
+  /* Demo card: taller on desktop when space allows; stay compact on mobile. */
+  main.windowed.demo-window {
+    height: min(58dvh, 620px);
+  }
+  @media (max-width: 768px) {
+    main.windowed.demo-window {
+      height: min(46dvh, 420px);
+    }
   }
   /* Fullscreen size lives in CSS (not the style attr) so windowFrame reset
      can clear resize overrides without wiping the tween target. */

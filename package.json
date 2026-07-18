@@ -28,6 +28,7 @@
     "vite-plugin-singlefile": "^2.3.3"
   },
   "dependencies": {
+    "d3-force": "^3.0.0",
     "highlight.js": "^11.11.1",
     "marked": "^18.0.6",
     "marked-highlight": "^2.2.4"

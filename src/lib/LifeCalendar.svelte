@@ -13,6 +13,7 @@
     lifeCalendarStat,
     LIFE_CALENDAR_STAT_MODES,
     selectNoteByGuid,
+    selectedNote,
     sidebarOpen,
     sidebarWidth,
   } from './store';
@@ -188,6 +189,17 @@
   let showWeekGutter = $derived($sidebarWidth >= WEEK_GUTTER_MIN_WIDTH);
   let lifetimeWeeks = $derived(buildLifetimeWeeks(years));
 
+  /** Life-grid week index for the open note's createdAt (null when none / out of range). */
+  let noteWeekIndex = $derived.by(() => {
+    const guid = $selectedNote?.guid ?? null;
+    if (!guid) return null;
+    const ts = Number($selectedNote?.createdAt);
+    if (!Number.isFinite(ts) || lifetimeWeeks.length === 0) return null;
+    const listIndex = findWeekListIndexForTs(lifetimeWeeks, ts);
+    if (listIndex < 0) return null;
+    return lifetimeWeeks[listIndex].index;
+  });
+
   /** @type {{ age: number, weekOfYear: number, index: number } | null} */
   let selected = $state.raw(null);
   /** JIT view-transition targets — only set while a transition is armed/running */
@@ -214,6 +226,13 @@
   /** Pending list index to scroll to after week view mounts */
   /** @type {number | null} */
   let pendingScrollListIndex = $state(null);
+  /** Track week-view open edge so note-sync doesn't steal the opening week click. */
+  let weekViewWasOpen = false;
+  /** @type {string | null} */
+  let lastNoteSyncedGuid = null;
+  /** Avoid re-scrolling the life grid for the same note/createdAt. */
+  /** @type {string | null} */
+  let lastLifeGridNoteScrollKey = null;
 
   let inWeekView = $derived(selected !== null);
   let selectedYear = $derived(
@@ -337,6 +356,74 @@
     const listIndex = pendingScrollListIndex;
     pendingScrollListIndex = null;
     scrollToListIndex(listIndex, false);
+  });
+
+  /**
+   * Keep week stream aligned with the selected note (NoteList / Graph / etc.),
+   * the same way NoteList scrolls to the open note. Only while week view is open;
+   * does not override the week the user just zoomed into.
+   */
+  $effect(() => {
+    const open = inWeekView && !!weekPaneEl;
+    const guid = $selectedNote?.guid ?? null;
+    const ts = Number($selectedNote?.createdAt);
+    const weeks = lifetimeWeeks;
+
+    if (!open) {
+      weekViewWasOpen = false;
+      return;
+    }
+
+    const justOpened = !weekViewWasOpen;
+    weekViewWasOpen = true;
+
+    if (!guid || !Number.isFinite(ts) || weeks.length === 0) return;
+
+    if (justOpened) {
+      lastNoteSyncedGuid = guid;
+      return;
+    }
+
+    if (guid === lastNoteSyncedGuid) return;
+    lastNoteSyncedGuid = guid;
+
+    const listIndex = findWeekListIndexForTs(weeks, ts);
+    if (listIndex < 0) return;
+    const week = weeks[listIndex];
+    selected = {
+      age: week.age,
+      weekOfYear: week.weekOfYear,
+      index: week.index,
+    };
+    scrollToListIndex(listIndex, true);
+  });
+
+  /**
+   * In the zoomed-out life grid, outline + scroll to the week that owns the
+   * selected note's createdAt (NoteList / Graph / etc.).
+   */
+  $effect(() => {
+    if (inWeekView || !scrollEl) return;
+
+    const guid = $selectedNote?.guid ?? null;
+    const ts = Number($selectedNote?.createdAt);
+    const weekIndex = noteWeekIndex;
+
+    if (!guid || weekIndex == null || !Number.isFinite(ts)) {
+      lastLifeGridNoteScrollKey = null;
+      return;
+    }
+
+    const key = `${guid}:${ts}`;
+    if (key === lastLifeGridNoteScrollKey) return;
+    lastLifeGridNoteScrollKey = key;
+
+    const behavior = prefersReducedMotion() ? 'auto' : 'smooth';
+    tick().then(() => {
+      scrollEl
+        ?.querySelector(`[data-week-index="${weekIndex}"]`)
+        ?.scrollIntoView({ block: 'nearest', behavior });
+    });
   });
 
   function cycleTitleStat() {
@@ -631,7 +718,10 @@
                     type="button"
                     class="week {week.status}"
                     class:anim-pulse={week.status === 'current'}
+                    class:selected={noteWeekIndex === week.index}
                     class:vt-week={vtWeekIndex === week.index}
+                    data-week-index={week.index}
+                    aria-current={noteWeekIndex === week.index ? 'true' : undefined}
                     aria-label="Age {year.age}, week {weekOfYear + 1}"
                     onclick={() => onWeekClick(year.age, weekOfYear, week)}
                   ></button>

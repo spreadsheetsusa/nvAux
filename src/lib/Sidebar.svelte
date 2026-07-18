@@ -93,6 +93,9 @@
   }
 
   .sidebar.open {
+    /* Above .main-content (z-index: 1) so the horizontal resize accent is visible.
+       Drawer mode overrides with z-index: 50 below. */
+    z-index: 2;
     border-right-color: var(--app-statusbar-border);
   }
 

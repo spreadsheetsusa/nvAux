@@ -63,7 +63,7 @@
   class="resize-handle select-none flex-shrink-0"
   class:vertical={orientation === 'vertical'}
   class:horizontal={orientation === 'horizontal'}
-  class:active={dragging}
+  class:is-dragging={dragging}
   class:row-resize={orientation === 'vertical'}
   class:col-resize={orientation === 'horizontal'}
   role="separator"
@@ -114,13 +114,13 @@
     width: 1px;
     height: 100%;
     margin: 0 auto;
-    background: transparent;
+    background-color: transparent;
     transition: background-color 150ms ease;
   }
 
   .resize-handle.horizontal:hover::after,
-  .resize-handle.horizontal.active::after {
-    background: var(--app-accent);
+  .resize-handle.horizontal.is-dragging::after {
+    background-color: var(--app-accent, #ed0178);
   }
 
   .resize-handle.vertical::after {
@@ -128,12 +128,12 @@
     display: block;
     width: 100%;
     height: 1px;
-    background: var(--app-resizer-background);
+    background-color: var(--app-resizer-background);
     transition: background-color 150ms ease;
   }
 
   .resize-handle.vertical:hover::after,
-  .resize-handle.vertical.active::after {
-    background: var(--app-accent);
+  .resize-handle.vertical.is-dragging::after {
+    background-color: var(--app-accent, #ed0178);
   }
 </style>

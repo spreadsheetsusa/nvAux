@@ -28,6 +28,9 @@ html, body { margin: 0; padding: 0; font-family: Verdana, Geneva, Tahoma, sans-s
 .flex-grow { flex-grow: 1; }
 .flex-grow-0 { flex-grow: 0; }
 .flex-shrink-0 { flex-shrink: 0; }
+.gap-1 { gap: 0.25rem; }
+.gap-2 { gap: 0.5rem; }
+.gap-3 { gap: 0.75rem; }
 .h-\[10px\] { height: 10px; }
 .h-full { height: 100%; }
 .h-screen {  height: 100dvh; }
@@ -77,12 +80,38 @@ html, body { margin: 0; padding: 0; font-family: Verdana, Geneva, Tahoma, sans-s
 .btn { padding: 12px 20px; border-radius: 3px; font-size: 14px; }
 
 
+/* Register gradient stops as colors so accent changes can interpolate smoothly. */
+@property --grad-1 {
+	syntax: '<color>';
+	inherits: true;
+	initial-value: #ea8060;
+}
+@property --grad-2 {
+	syntax: '<color>';
+	inherits: true;
+	initial-value: #e4578d;
+}
+@property --grad-3 {
+	syntax: '<color>';
+	inherits: true;
+	initial-value: #a1d0e1;
+}
+@property --grad-4 {
+	syntax: '<color>';
+	inherits: true;
+	initial-value: #70e1c7;
+}
+
 body {
-	background: linear-gradient(-45deg, #ea8060, #e4578d, #a1d0e1, #70e1c7);
+	background: linear-gradient(
+		-45deg,
+		var(--grad-1, #ea8060),
+		var(--grad-2, #e4578d),
+		var(--grad-3, #a1d0e1),
+		var(--grad-4, #70e1c7)
+	);
 	background-size: 400% 400%;
 	animation: gradient 40s ease-in-out infinite;
-	/* background: var(--background); */
-	/* background: var(--background-gradient); */
 	color: var(--text-color);
 }
 
@@ -102,10 +131,13 @@ body.is-panel-resizing .sidebar {
 
 /* Light/Dark Mode Support */
 :root {
-	/* --background-color: white; */
-	/* --background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab); */
 	--text-color: black;
 	--app-accent: #ed0178;
+	/* Accent-seeded page gradient (JS updates these; defaults match classic coral/pink/sky/mint). */
+	--grad-1: #ea8060;
+	--grad-2: #e4578d;
+	--grad-3: #a1d0e1;
+	--grad-4: #70e1c7;
 	--app-background: #eaeaea;
 	--app-omni-background: #d8d8d8;
 	--app-statusbar-background: #d1d1d1;
@@ -116,17 +148,29 @@ body.is-panel-resizing .sidebar {
 	--app-notelist-even-background: #e3e3e3;
 	--scrollbar-thumb: rgba(60, 60, 60, 0.28);
 	--scrollbar-thumb-hover: rgba(60, 60, 60, 0.45);
+	transition:
+		--grad-1 0.85s ease,
+		--grad-2 0.85s ease,
+		--grad-3 0.85s ease,
+		--grad-4 0.85s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	:root {
+		transition: none;
+	}
 }
 
 @media (prefers-color-scheme: dark) {
 	:root {
-		/* --background-color: black; */
-		/* --background: linear-gradient(-45deg, #813822, #7e183f, #125f7e, #0f755e); */
 		--text-color: white;
+		--grad-1: #714436;
+		--grad-2: #72354d;
+		--grad-3: #334169;
+		--grad-4: #4c746a;
 		--app-background: #181a1c;
 		--app-omni-background: #181a1c;
 		--app-statusbar-background: #151719;
-		--app-statusbar-border: #c4c4c4;
 		--app-statusbar-border: #24272a;
 		--app-notedetail-background: #1c1f21;
 		--app-notelist-odd-background: #222426;
@@ -134,12 +178,6 @@ body.is-panel-resizing .sidebar {
 		--app-resizer-background: #181a1c;
 		--scrollbar-thumb: rgba(255, 255, 255, 0.22);
 		--scrollbar-thumb-hover: rgba(255, 255, 255, 0.38);
-	}
-
-	body {
-		background: linear-gradient(-45deg, #714436, #72354d, #334169, #4c746a);
-		background-size: 400% 400%;
-		animation: gradient 40s ease-in-out infinite;
 	}
 }
 
