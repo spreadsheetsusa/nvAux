@@ -17,7 +17,7 @@
 <div class="text-white h-full" style="padding: 5px 15px; margin: 0;">
   <span class="font-bold">nvAux Settings</span>
   <div class="relative">
-    {#await db().notes.find().exec()}
+    {#await db().then((database) => database.notes.find().exec())}
       <p>...waiting</p>
     {:then notes}
       <p><span class="text-gray-400">Total Notes:</span> {notes.length}</p>
