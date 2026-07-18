@@ -276,7 +276,7 @@
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
-        class="markdown-preview thin-scrollbar flex-1 min-h-0 overflow-y-auto"
+        class="markdown-preview thin-scrollbar flex-1 min-h-0 overflow-y-auto mt-3"
         onclick={handlePreviewClick}
       >
         {@html previewHtml}
@@ -286,7 +286,7 @@
         <textarea
           id="body-editor"
           bind:this={editorEl}
-          class="body-editor thin-scrollbar absolute inset-0 w-full h-full overflow-y-auto block no-resize border-0 outline-none border-box bg-transparent"
+          class="body-editor thin-scrollbar absolute inset-0 w-full h-full overflow-y-auto block no-resize border-0 outline-none border-box bg-transparent mt-3"
           bind:value={$bodyText}
           oninput={handleEditorInput}
           onkeydown={handleEditorKeydown}
@@ -336,6 +336,11 @@
     font-size: 14px;
     font-family: Arial, Helvetica, sans-serif;
     line-height: 1.5;
+  }
+
+  /* Match edit textarea: no extra top offset from first block's margin */
+  .markdown-preview :global(:first-child) {
+    margin-top: 0;
   }
 
   .markdown-preview :global(h1),

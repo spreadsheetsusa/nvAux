@@ -5,6 +5,7 @@
 
   import IconXcircle from './IconXcircle.svelte';
   import IconSidebar from './IconSidebar.svelte';
+  import IconSettings from './IconSettings.svelte';
 
   import {
     omniMode,
@@ -18,7 +19,10 @@
     showClock,
     invalidateWikiNoteNames,
     isMobile,
+    selectNoteByGuid,
   } from './store';
+
+  const SETTINGS_GUID = '00000000-0000-0000-0000-000000000000';
 
   let omniInput = $state();
   let time = $state(new Date());
@@ -32,6 +36,11 @@
     } else {
       $fullScreen = false;
     }
+  }
+
+  /** Open Settings note without changing Omnibar filter/search. */
+  function openSettings() {
+    selectNoteByGuid(SETTINGS_GUID);
   }
 
   onMount(() => {
@@ -139,6 +148,15 @@
     {#if $showClock}
       <div class="clock flex items-center select-none" style="font-size: 12px; margin-right: 10px; color: #88959f;">{format(time, 'hh:mm:ss a')}</div>
     {/if}
+    <button
+      type="button"
+      aria-label="Open settings"
+      class="bg-transparent flex items-center outline-none transition-all"
+      style="margin-right: 8px;"
+      onclick={openSettings}
+    >
+      <IconSettings />
+    </button>
     <button
       type="button"
       aria-label="Toggle fullscreen"

@@ -255,6 +255,10 @@
         tabindex="-1"
         ondblclick={() => {
           if (renamingGuid === note.guid) return;
+          if (isAppWindowed) {
+            handleOpenInNewWindow(note);
+            return;
+          }
           const bodyEditor = document.getElementById('body-editor');
           if (bodyEditor instanceof HTMLTextAreaElement) {
             bodyEditor.focus();

@@ -108,16 +108,10 @@
     ? 'min-h-screen overflow-y-auto'
     : 'h-screen overflow-hidden justify-center'} {isAppFullscreen ? '' : 'p-2'}"
 >
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="w-full flex flex-col justify-center items-center"
     class:demo-stage={isDemo}
     class:h-full={!isDemo}
-    class:app-window-stage={isAppWindowed}
-    style:z-index={isAppWindowed ? $mainWindowZIndex : undefined}
-    onpointerdown={() => {
-      if (isAppWindowed) raiseMainWindow();
-    }}
   >
     <div
       class="demo-hero transition-all text-center"
@@ -143,11 +137,16 @@
       <Sidebar />
     {/if}
 
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <main
       use:windowFrame={{ enabled: isAppWindowed, threshold: 2 }}
       class="{isAppFullscreen ? 'fullscreen' : 'windowed'} relative overflow-hidden flex transition-all"
       class:sidebar-open={layoutSidebarOpen}
       style="background-color: var(--app-background); --sidebar-width: {$sidebarWidth}px;"
+      style:z-index={isAppWindowed ? $mainWindowZIndex : undefined}
+      onpointerdown={() => {
+        if (isAppWindowed) raiseMainWindow();
+      }}
     >
       {#if !$isMobile}
         <Sidebar />
@@ -248,10 +247,6 @@
   }
   main.windowed.sidebar-open {
     max-width: calc(690px + var(--sidebar-width, 443px));
-  }
-  /* Stacking peer of note popups — z-index set from mainWindowZIndex. */
-  .app-window-stage {
-    position: relative;
   }
   .main-content {
     z-index: 1;

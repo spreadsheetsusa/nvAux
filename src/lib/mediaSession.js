@@ -2,7 +2,6 @@ import { get, writable } from 'svelte/store';
 import { v4 as uuidv4 } from 'uuid';
 
 import { extractMediaLinks } from '../utils/extractMediaLinks';
-import { mediaPlayerHeight } from './store';
 
 /**
  * @typedef {{
@@ -151,7 +150,6 @@ export function mediaPlayNow(tracks) {
 export function mediaClearSession() {
   mediaPlaylist.set([]);
   mediaTrackIndex.set(0);
-  mediaPlayerHeight.set(0);
 }
 
 /**

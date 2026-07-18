@@ -39,6 +39,7 @@ html, body { margin: 0; padding: 0; font-family: Verdana, Geneva, Tahoma, sans-s
 .justify-center { justify-content: center; }
 .justify-end { justify-content: flex-end; }
 .m-1\.5 { margin: 0.375rem; }
+.mt-3 { margin-top: 0.75rem; }
 .min-h-0 { min-height: 0; }
 .min-h-screen { min-height: 100dvh; }
 .min-w-0 { min-width: 0; }
