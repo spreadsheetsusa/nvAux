@@ -39,6 +39,12 @@ const storedWindowed = (() => {
   }
   return false;
 })();
+/** Matches StatusBar / mobile drawer breakpoint. */
+export const MOBILE_BREAKPOINT = 768;
+const mobileMq =
+  typeof window !== 'undefined'
+    ? window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`)
+    : null;
 const storedShowClock = JSON.parse(localStorage.getItem('showClock')) || "true";
 const storedShowStatusBar = readStoredBool('showStatusBar', true);
 const storedSidebarOpen = readStoredBool('sidebarOpen', false);
@@ -159,11 +165,28 @@ export const selectedNote = writable({});
 export const bodyText = writable('');
 export const markdownPreview = writable(false);
 export const fullScreen = writable(storedFullScreen);
-/** App Mode floating window (vs edge-to-edge fullscreen). */
+/** App Mode floating window (vs edge-to-edge fullscreen). Desktop only. */
 export const windowed = writable(storedWindowed);
+/** True when viewport is at or below {@link MOBILE_BREAKPOINT}. */
+export const isMobile = writable(mobileMq ? mobileMq.matches : false);
 export const showClock = writable(storedShowClock);
 export const showStatusBar = writable(storedShowStatusBar);
 export const sidebarOpen = writable(storedSidebarOpen);
+
+if (mobileMq) {
+  const syncMobile = () => isMobile.set(mobileMq.matches);
+  // Safari < 14 used addListener; prefer addEventListener.
+  if (typeof mobileMq.addEventListener === 'function') {
+    mobileMq.addEventListener('change', syncMobile);
+  } else if (typeof mobileMq.addListener === 'function') {
+    mobileMq.addListener(syncMobile);
+  }
+}
+
+// Windowed is desktop-only — drop it as soon as we enter a mobile viewport.
+isMobile.subscribe((mobile) => {
+  if (mobile) windowed.set(false);
+});
 export const birthDate = writable(storedBirthDate);
 export const expectedLongevity = writable(storedExpectedLongevity);
 export const lifeCalendarStat = writable(storedLifeCalendarStat);

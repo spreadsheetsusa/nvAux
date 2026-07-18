@@ -1,10 +1,12 @@
 <script>
-  import { fullScreen, windowed } from './store';
+  import { fullScreen, windowed, isMobile } from './store';
+
+  let isAppFullscreen = $derived($fullScreen && (!$windowed || $isMobile));
 </script>
 
 <div
   class="status-bar px-2 items-center flex absolute w-full flex-grow-0 transition-all"
-  style="font-size: 12px; background: var(--app-statusbar-background); bottom: 0; left: 0; color: #606060; border-top: 1px solid var(--app-statusbar-border); height: {$fullScreen && !$windowed ? '45px' : '34px'};"
+  style="font-size: 12px; background: var(--app-statusbar-background); bottom: 0; left: 0; color: #606060; border-top: 1px solid var(--app-statusbar-border); height: {isAppFullscreen ? '45px' : '34px'};"
 >
   <div class="flex-grow flex items-center">nvAux v0.1.7-20260716-001</div>
 </div>

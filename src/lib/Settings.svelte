@@ -9,6 +9,7 @@
     birthDate,
     expectedLongevity,
     invalidateWikiNoteNames,
+    isMobile,
   } from './store';
 
   import DownloadNotesZip from './DownloadNotesZip.svelte';
@@ -76,8 +77,16 @@
       <div style="margin-top: 15px;">
         <label for="fullScreen"><input id="fullScreen" type="checkbox" bind:checked={$fullScreen} /> App Mode</label>
       </div>
-      <div style="margin-top: 3px; margin-left: 15px; opacity: {$fullScreen ? 1 : 0.5}">
-        <label for="windowed"><input id="windowed" type="checkbox" disabled={!$fullScreen} bind:checked={$windowed} /> Windowed</label>
+      <div style="margin-top: 3px; margin-left: 15px; opacity: {$fullScreen && !$isMobile ? 1 : 0.5}">
+        <label for="windowed">
+          <input
+            id="windowed"
+            type="checkbox"
+            disabled={!$fullScreen || $isMobile}
+            bind:checked={$windowed}
+          />
+          Windowed{$isMobile ? ' (desktop only)' : ''}
+        </label>
       </div>
     </div>
 
