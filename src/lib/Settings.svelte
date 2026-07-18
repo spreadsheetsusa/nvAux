@@ -10,6 +10,7 @@
     expectedLongevity,
     isMobile,
     resetDatabase,
+    hardRefreshApp,
     accentColor,
     ACCENT_COLOR_PRESETS,
   } from './store';
@@ -23,6 +24,10 @@
   let resetConfirming = $state(false);
   let resetting = $state(false);
   let resetError = $state('');
+
+  let hardRefreshConfirming = $state(false);
+  let hardRefreshing = $state(false);
+  let hardRefreshError = $state('');
 
   /** @param {string} iso YYYY-MM-DD in local time (avoids UTC parse shift) */
   function parseLocalDate(iso) {
@@ -66,6 +71,25 @@
     } catch (err) {
       resetError = err?.message || 'Reset failed. Try again.';
       resetting = false;
+    }
+  }
+
+  function cancelHardRefresh() {
+    if (hardRefreshing) return;
+    hardRefreshConfirming = false;
+    hardRefreshError = '';
+  }
+
+  async function confirmHardRefresh() {
+    if (hardRefreshing) return;
+    hardRefreshing = true;
+    hardRefreshError = '';
+    try {
+      await hardRefreshApp();
+      location.reload();
+    } catch (err) {
+      hardRefreshError = err?.message || 'Hard refresh failed. Try again.';
+      hardRefreshing = false;
     }
   }
 </script>
@@ -200,18 +224,62 @@
         {#if resetError}
           <p style="color: #f87171; margin-top: 10px; font-size: 13px;">{resetError}</p>
         {/if}
+      {:else if hardRefreshConfirming}
+        <p class="text-gray-400" style="margin-top: 10px; font-size: 13px; line-height: 1.4;">
+          Unregisters the service worker, clears cached files, and reloads. Your notes are kept.
+        </p>
+        <div class="flex flex-wrap items-center" style="gap: 8px; margin-top: 12px;">
+          <button
+            aria-label="Confirm Hard Refresh"
+            class="btn"
+            style="background: #3a3d42;"
+            disabled={hardRefreshing}
+            onclick={confirmHardRefresh}
+          >
+            {hardRefreshing ? 'Refreshing…' : 'Confirm Hard Refresh'}
+          </button>
+          <button
+            aria-label="Cancel Hard Refresh"
+            class="btn"
+            style="background: #3a3d42;"
+            disabled={hardRefreshing}
+            onclick={cancelHardRefresh}
+          >
+            Cancel
+          </button>
+        </div>
+        {#if hardRefreshError}
+          <p style="color: #f87171; margin-top: 10px; font-size: 13px;">{hardRefreshError}</p>
+        {/if}
       {:else}
-        <button
-          aria-label="Reset Database"
-          class="btn"
-          style="background: #b41111; margin-top: 10px;"
-          onclick={() => {
-            resetConfirming = true;
-            resetError = '';
-          }}
-        >
-          Reset Database
-        </button>
+        <div class="flex flex-wrap items-center" style="gap: 8px; margin-top: 10px;">
+          <button
+            aria-label="Reset Database"
+            class="btn"
+            style="background: #b41111;"
+            onclick={() => {
+              resetConfirming = true;
+              hardRefreshConfirming = false;
+              resetError = '';
+              hardRefreshError = '';
+            }}
+          >
+            Reset Database
+          </button>
+          <button
+            aria-label="Hard Refresh"
+            class="btn"
+            style="background: #3a3d42;"
+            onclick={() => {
+              hardRefreshConfirming = true;
+              resetConfirming = false;
+              hardRefreshError = '';
+              resetError = '';
+            }}
+          >
+            Hard Refresh
+          </button>
+        </div>
       {/if}
     </div>
   </div>

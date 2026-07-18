@@ -99,7 +99,7 @@ html, body { margin: 0; padding: 0; font-family: Verdana, Geneva, Tahoma, sans-s
 @property --grad-4 {
 	syntax: '<color>';
 	inherits: true;
-	initial-value: #70e1c7;
+	initial-value: #94a3b8;
 }
 
 body {
@@ -108,7 +108,7 @@ body {
 		var(--grad-1, #ea8060),
 		var(--grad-2, #e4578d),
 		var(--grad-3, #a1d0e1),
-		var(--grad-4, #70e1c7)
+		var(--grad-4, #94a3b8)
 	);
 	background-size: 400% 400%;
 	animation: gradient 40s ease-in-out infinite;
@@ -133,11 +133,11 @@ body.is-panel-resizing .sidebar {
 :root {
 	--text-color: black;
 	--app-accent: #ed0178;
-	/* Accent-seeded page gradient (JS updates these; defaults match classic coral/pink/sky/mint). */
+	/* Accent-seeded page gradient (JS updates these; defaults match coral/pink/sky/slate). */
 	--grad-1: #ea8060;
 	--grad-2: #e4578d;
 	--grad-3: #a1d0e1;
-	--grad-4: #70e1c7;
+	--grad-4: #94a3b8;
 	--app-background: #eaeaea;
 	--app-omni-background: #d8d8d8;
 	--app-statusbar-background: #d1d1d1;
@@ -167,7 +167,7 @@ body.is-panel-resizing .sidebar {
 		--grad-1: #714436;
 		--grad-2: #72354d;
 		--grad-3: #334169;
-		--grad-4: #4c746a;
+		--grad-4: #3a4558;
 		--app-background: #181a1c;
 		--app-omni-background: #181a1c;
 		--app-statusbar-background: #151719;

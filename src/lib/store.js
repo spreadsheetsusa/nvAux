@@ -214,6 +214,18 @@ export async function resetDatabase() {
   invalidateWikiNoteNames();
 }
 
+/** Unregister service workers and clear Cache Storage. Notes and prefs are kept. */
+export async function hardRefreshApp() {
+  if ('serviceWorker' in navigator) {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(regs.map((reg) => reg.unregister()));
+  }
+  if ('caches' in window) {
+    const keys = await caches.keys();
+    await Promise.all(keys.map((key) => caches.delete(key)));
+  }
+}
+
 /**
  * Svelte Writables ************************************************************
  */

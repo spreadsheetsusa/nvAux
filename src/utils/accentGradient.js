@@ -86,13 +86,13 @@ export function gradientStopsFromAccent(accentHex, { dark = false } = {}) {
   // Keep chroma lively even for muted accents; dark mode stays deeper.
   const baseS = dark ? clamp01(Math.max(0.28, s * 0.72)) : clamp01(Math.max(0.42, Math.min(0.78, s * 0.9 + 0.12)));
 
-  // Stops: warm neighbor → accent seed → cool companion → further cool (sky/mint).
+  // Stops: warm neighbor → accent seed → cool companion → cold desaturated blue.
   if (dark) {
     return [
       hslToHex({ h: h - 24, s: baseS, l: 0.3 }),
       hslToHex({ h, s: clamp01(baseS + 0.06), l: 0.28 }),
       hslToHex({ h: h + 168, s: clamp01(baseS * 0.85), l: 0.26 }),
-      hslToHex({ h: h + 208, s: clamp01(baseS * 0.8), l: 0.3 }),
+      hslToHex({ h: h + 245, s: clamp01(baseS * 0.5), l: 0.28 }),
     ];
   }
 
@@ -100,7 +100,7 @@ export function gradientStopsFromAccent(accentHex, { dark = false } = {}) {
     hslToHex({ h: h - 26, s: clamp01(baseS * 0.95), l: 0.64 }),
     hslToHex({ h, s: clamp01(baseS + 0.05), l: 0.58 }),
     hslToHex({ h: h + 170, s: clamp01(baseS * 0.72), l: 0.74 }),
-    hslToHex({ h: h + 210, s: clamp01(baseS * 0.68), l: 0.68 }),
+    hslToHex({ h: h + 245, s: clamp01(baseS * 0.42), l: 0.66 }),
   ];
 }
 

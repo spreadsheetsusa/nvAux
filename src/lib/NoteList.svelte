@@ -76,7 +76,10 @@
     const query = trimmed
       ? database.notes.find({
           selector: {
-            $or: [{ name: { $regex: pattern } }, { body: { $regex: pattern } }],
+            $or: [
+              { name: { $regex: pattern, $options: 'i' } },
+              { body: { $regex: pattern, $options: 'i' } },
+            ],
           },
           sort,
         })
