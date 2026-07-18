@@ -8,6 +8,8 @@
     max = 600,
     ariaLabel = 'Resize',
     getMax = null,
+    /** When true, pointer delta is inverted (e.g. drag up to grow a bottom panel). */
+    invert = false,
   } = $props();
 
   let dragging = $state(false);
@@ -42,7 +44,7 @@
     if (!dragging) return;
     event.preventDefault();
     const pos = orientation === 'vertical' ? event.clientY : event.clientX;
-    const delta = pos - startPos;
+    const delta = (pos - startPos) * (invert ? -1 : 1);
     value = Math.round(clamp(startValue + delta, min, activeMax));
   }
 

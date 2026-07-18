@@ -38,6 +38,84 @@ function escapeMarkdownLinkText(s) {
   return s.replace(/([\\\[\]])/g, '\\$1');
 }
 
+/** Complete `[[Title]]` tokens (title may not contain `]` or newlines). */
+const WIKI_LINK_RE = /\[\[([^\]\n]+)\]\]/g;
+
+/**
+ * Extract trimmed titles from complete `[[Title]]` tokens in note body text.
+ * @param {string | null | undefined} text
+ * @returns {string[]}
+ */
+export function extractWikiLinkTitles(text) {
+  if (!text) return [];
+  /** @type {string[]} */
+  const titles = [];
+  WIKI_LINK_RE.lastIndex = 0;
+  let match;
+  while ((match = WIKI_LINK_RE.exec(text)) !== null) {
+    const name = String(match[1]).trim();
+    if (name) titles.push(name);
+  }
+  return titles;
+}
+
+/**
+ * Build a note graph from wiki links for visualization.
+ * Every note is a node; unresolved `[[Title]]` targets become ghost nodes.
+ *
+ * @param {Array<{ guid?: string, name?: string, body?: string }>} notes
+ * @returns {{
+ *   nodes: Array<{ id: string, name: string, guid: string | null, ghost: boolean }>,
+ *   links: Array<{ source: string, target: string }>,
+ * }}
+ */
+export function buildNoteGraph(notes) {
+  /** @type {Map<string, { id: string, name: string, guid: string | null, ghost: boolean }>} */
+  const byName = new Map();
+
+  for (const note of notes || []) {
+    const name = (note?.name || '').trim();
+    if (!name) continue;
+    byName.set(name, {
+      id: name,
+      name,
+      guid: note.guid || null,
+      ghost: false,
+    });
+  }
+
+  /** @type {Array<{ source: string, target: string }>} */
+  const links = [];
+  /** @type {Set<string>} */
+  const seenEdges = new Set();
+
+  for (const note of notes || []) {
+    const sourceName = (note?.name || '').trim();
+    if (!sourceName || !byName.has(sourceName)) continue;
+
+    for (const rawTarget of extractWikiLinkTitles(note.body)) {
+      const targetName = rawTarget.trim();
+      if (!targetName || targetName === sourceName) continue;
+
+      if (!byName.has(targetName)) {
+        byName.set(targetName, {
+          id: targetName,
+          name: targetName,
+          guid: null,
+          ghost: true,
+        });
+      }
+
+      const edgeKey = `${sourceName}\0${targetName}`;
+      if (seenEdges.has(edgeKey)) continue;
+      seenEdges.add(edgeKey);
+      links.push({ source: sourceName, target: targetName });
+    }
+  }
+
+  return { nodes: [...byName.values()], links };
+}
+
 /**
  * Turn complete [[Title]] tokens into markdown links marked can render.
  * @param {string | null | undefined} text
@@ -45,7 +123,8 @@ function escapeMarkdownLinkText(s) {
  */
 export function toWikiPreviewMarkdown(text) {
   if (!text) return '';
-  return text.replace(/\[\[([^\]\n]+)\]\]/g, (_, title) => {
+  WIKI_LINK_RE.lastIndex = 0;
+  return text.replace(WIKI_LINK_RE, (_, title) => {
     const name = String(title).trim();
     if (!name) return `[[${title}]]`;
     const href = `#wiki:${encodeURIComponent(name)}`;

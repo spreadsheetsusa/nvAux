@@ -2,11 +2,13 @@
   import { onMount, tick } from 'svelte';
   import { addYears, addDays, differenceInDays, format, startOfDay } from 'date-fns';
   import IconChevronLeft from './IconChevronLeft.svelte';
+  import IconGraph from './IconGraph.svelte';
   import WeekNoteChart from './WeekNoteChart.svelte';
   import {
     birthDate,
     db,
     expectedLongevity,
+    graphViewOpen,
     isMobile,
     lifeCalendarStat,
     LIFE_CALENDAR_STAT_MODES,
@@ -570,14 +572,27 @@
   }}
 >
   {#if !inWeekView}
-    <button
-      type="button"
-      class="life-calendar-title flex-shrink-0 w-full select-none"
-      title="Click to change stat"
-      onclick={cycleTitleStat}
-    >
-      {titleStat}
-    </button>
+    <div class="life-calendar-title-row flex items-center flex-shrink-0 min-w-0">
+      <button
+        type="button"
+        class="life-calendar-title flex-1 min-w-0 select-none"
+        title="Click to change stat"
+        onclick={cycleTitleStat}
+      >
+        {titleStat}
+      </button>
+      {#if !$graphViewOpen}
+        <button
+          type="button"
+          class="life-calendar-graph-btn flex-shrink-0 flex items-center justify-center"
+          aria-label="Open graph view"
+          title="Graph view"
+          onclick={() => graphViewOpen.set(true)}
+        >
+          <IconGraph />
+        </button>
+      {/if}
+    </div>
     <div
       class="life-calendar-scroll thin-scrollbar flex-1 min-h-0 overflow-y-auto px-2 pb-5"
       role="region"
@@ -645,6 +660,17 @@
               <span class="week-pane-dates">{weekRangeLabel}</span>
             {/if}
           </div>
+          {#if !$graphViewOpen}
+            <button
+              type="button"
+              class="life-calendar-graph-btn flex-shrink-0 flex items-center justify-center"
+              aria-label="Open graph view"
+              title="Graph view"
+              onclick={() => graphViewOpen.set(true)}
+            >
+              <IconGraph />
+            </button>
+          {/if}
           {#if currentWeekMeta}
             <button
               type="button"
@@ -754,6 +780,11 @@
     view-transition-name: life-scope;
   }
 
+  .life-calendar-title-row {
+    margin: 11px 15px;
+    gap: 6px;
+  }
+
   .life-calendar-title {
     opacity: 0.7;
     font-size: 11px;
@@ -764,11 +795,26 @@
     font: inherit;
     text-align: left;
     cursor: pointer;
-    margin: 11px 15px;
+    padding: 0;
+    margin: 0;
   }
 
   .life-calendar-title:hover {
     opacity: 0.9;
+  }
+
+  .life-calendar-graph-btn {
+    background: none;
+    border: none;
+    color: inherit;
+    opacity: 0.45;
+    cursor: pointer;
+    padding: 2px;
+    border-radius: 4px;
+  }
+
+  .life-calendar-graph-btn:hover {
+    opacity: 0.85;
   }
 
   .life-calendar-rows {

@@ -6,6 +6,7 @@
   import {
     mediaPlayerHeight,
     selectNoteByGuid,
+    isMobile,
   } from './store';
   import {
     mediaPlaylist,
@@ -559,23 +560,25 @@
 
       <span class="time flex-shrink-0" aria-label="Duration">{durationLabel}</span>
 
-      <label class="volume flex items-center flex-shrink-0" title="Volume">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path
-            d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"
+      {#if !$isMobile}
+        <label class="volume flex items-center flex-shrink-0" title="Volume">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path
+              d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"
+            />
+          </svg>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            value={volume}
+            oninput={onVolumeInput}
+            aria-label="Volume"
+            disabled={!ready}
           />
-        </svg>
-        <input
-          type="range"
-          min="0"
-          max="100"
-          step="1"
-          value={volume}
-          oninput={onVolumeInput}
-          aria-label="Volume"
-          disabled={!ready}
-        />
-      </label>
+        </label>
+      {/if}
 
       <button
         type="button"

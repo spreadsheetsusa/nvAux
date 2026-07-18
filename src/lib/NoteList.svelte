@@ -287,7 +287,9 @@
       </span>
 
       <span class="meta flex items-center flex-shrink-0" style={selectedGuid === note.guid && 'background: #2252a0; color: white;'}>
-        <span class="truncate">{formatDate(note.updatedAt)}</span>
+        {#if !$isMobile}
+          <span class="truncate">{formatDate(note.updatedAt)}</span>
+        {/if}
         <button
           type="button"
           aria-label="Note options"
@@ -308,6 +310,7 @@
     x={contextMenuX}
     y={contextMenuY}
     showOpenInNewWindow={isAppWindowed}
+    updatedLabel={$isMobile && contextMenuNote ? formatDate(contextMenuNote.updatedAt) : ''}
     ondelete={handleDeleteNote}
     onrename={handleRename}
     onclose={handleCloseContextMenu}

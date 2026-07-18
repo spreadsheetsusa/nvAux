@@ -1,8 +1,13 @@
 <script>
   import { onMount } from 'svelte';
-  import { sidebarOpen, sidebarWidth, isMobile } from './store';
+  import { slide } from 'svelte/transition';
+  import { cubicOut } from 'svelte/easing';
+  import { sidebarOpen, sidebarWidth, isMobile, graphViewOpen } from './store';
   import LifeCalendar from './LifeCalendar.svelte';
+  import NoteGraphView from './NoteGraphView.svelte';
   import ResizeHandle from './ResizeHandle.svelte';
+
+  const GRAPH_SLIDE = { duration: 250, easing: cubicOut };
 
   const MIN_MAIN_CONTENT = 280;
   /** Leave a peek of the main app — classic iOS drawer / tap-to-dismiss strip. */
@@ -54,8 +59,18 @@
     ? `--sidebar-panel-width: ${panelWidth}; --drawer-peek: ${DRAWER_PEEK_PX}px;`
     : `width: ${open ? $sidebarWidth : 0}px; overflow: ${open ? 'visible' : 'hidden'}; --sidebar-panel-width: ${panelWidth};`}
 >
-  <div class="sidebar-inner h-full overflow-hidden" style="width: var(--sidebar-panel-width);">
-    <LifeCalendar />
+  <div
+    class="sidebar-inner h-full overflow-hidden flex flex-col"
+    style="width: var(--sidebar-panel-width);"
+  >
+    <div class="sidebar-calendar flex-1 min-h-0 overflow-hidden">
+      <LifeCalendar />
+    </div>
+    {#if $graphViewOpen}
+      <div class="sidebar-graph flex-shrink-0" transition:slide={GRAPH_SLIDE}>
+        <NoteGraphView />
+      </div>
+    {/if}
   </div>
   {#if open && !drawer}
     <ResizeHandle

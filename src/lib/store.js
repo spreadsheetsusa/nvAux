@@ -24,6 +24,13 @@ function readStoredBool(key, fallback) {
   }
 }
 
+const storedGraphViewHeight = localStorage.getItem('graphViewHeight') || 260;
+const storedGraphViewOpen = readStoredBool('graphViewOpen', false);
+const storedGraphViewZoom = (() => {
+  const raw = Number(localStorage.getItem('graphViewZoom'));
+  return Number.isFinite(raw) ? Math.min(2.5, Math.max(0.4, raw)) : 1;
+})();
+
 const storedFullScreen = readStoredBool('fullScreen', false);
 /** Windowed app mode; migrated from inverted legacy `maximumFullScreen`. */
 const storedWindowed = (() => {
@@ -215,6 +222,9 @@ export const omniText = writable('');
 export const noteList = writable([]);
 export const noteListHeight = writable(Number(storedNoteListHeight));
 export const sidebarWidth = writable(Number(storedSidebarWidth));
+export const graphViewOpen = writable(storedGraphViewOpen);
+export const graphViewHeight = writable(Number(storedGraphViewHeight));
+export const graphViewZoom = writable(storedGraphViewZoom);
 export const selectedNote = writable({});
 export const bodyText = writable('');
 export const markdownPreview = writable(false);
@@ -453,6 +463,9 @@ omniText.subscribe(v => {
 noteListHeight.subscribe(v => localStorage.setItem('noteListHeight', v.toString()));
 sidebarWidth.subscribe(v => localStorage.setItem('sidebarWidth', v.toString()));
 sidebarOpen.subscribe(v => localStorage.setItem('sidebarOpen', JSON.stringify(v)));
+graphViewHeight.subscribe(v => localStorage.setItem('graphViewHeight', v.toString()));
+graphViewZoom.subscribe(v => localStorage.setItem('graphViewZoom', v.toString()));
+graphViewOpen.subscribe(v => localStorage.setItem('graphViewOpen', JSON.stringify(v)));
 
 /** Debounced bump of the Settings note so the list timestamp reflects last preference change. */
 let touchSettingsNoteTimer;

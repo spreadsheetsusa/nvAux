@@ -205,6 +205,54 @@ body.is-panel-resizing .sidebar {
 	background: transparent;
 }
 
+/* Shared range input (Settings longevity, Graph View zoom, …) */
+.settings-range {
+	-webkit-appearance: none;
+	appearance: none;
+	flex: 1;
+	width: 100%;
+	height: 6px;
+	background: #2b2d30;
+	border-radius: 3px;
+	outline: none;
+	accent-color: var(--app-accent);
+	cursor: pointer;
+}
+
+.settings-range::-webkit-slider-thumb {
+	-webkit-appearance: none;
+	appearance: none;
+	width: 14px;
+	height: 14px;
+	border-radius: 50%;
+	background: var(--app-accent);
+	border: none;
+	cursor: pointer;
+}
+
+.settings-range::-moz-range-thumb {
+	width: 14px;
+	height: 14px;
+	border-radius: 50%;
+	background: var(--app-accent);
+	border: none;
+	cursor: pointer;
+}
+
+.settings-range::-moz-range-track {
+	height: 6px;
+	background: #2b2d30;
+	border-radius: 3px;
+}
+
+.settings-range:focus-visible::-webkit-slider-thumb {
+	box-shadow: 0 0 0 2px #1a1c1e, 0 0 0 4px #404856;
+}
+
+.settings-range:focus-visible::-moz-range-thumb {
+	box-shadow: 0 0 0 2px #1a1c1e, 0 0 0 4px #404856;
+}
+
 /* Life Calendar week zoom — View Transitions (sidebar-scoped) */
 @supports (view-transition-name: none) {
 	::view-transition-group(life-year),
