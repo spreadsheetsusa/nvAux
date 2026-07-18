@@ -98,9 +98,20 @@
 
   let isSettings = $derived(guid === SETTINGS_GUID);
   let showPreview = $derived(!isSettings && !missing && $markdownPreview);
-  let previewHtml = $derived(
-    showPreview ? marked.parse(toWikiPreviewMarkdown(localBody || '')) : ''
-  );
+  let previewHtml = $state('');
+
+  $effect(() => {
+    if (!showPreview) {
+      previewHtml = '';
+      return;
+    }
+    const body = localBody || '';
+    const timeoutId = window.setTimeout(() => {
+      previewHtml = marked.parse(toWikiPreviewMarkdown(body));
+    }, 150);
+    return () => window.clearTimeout(timeoutId);
+  });
+
   let editorId = $derived(`body-editor-popup-${guid}`);
 
   $effect(() => {
@@ -170,10 +181,11 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
+<!-- style:z-index only — a full style="…" attr would wipe popupFrame geometry -->
 <div
   class="note-popup"
   use:popupFrame={{ left, top, width, height, onFrame: handleFrame }}
-  style="z-index: {zIndex};"
+  style:z-index={zIndex}
   onpointerdown={handleRaise}
 >
   <div class="popup-titlebar flex items-center justify-between">
@@ -222,6 +234,7 @@
 
 <style>
   .note-popup {
+    position: fixed;
     display: flex;
     flex-direction: column;
     background: var(--app-background);
@@ -229,9 +242,12 @@
     border: 1px solid #3a3f412e;
     box-shadow: 0px 24px 48px -18px rgba(0, 0, 0, 0.75);
     overflow: hidden;
-    touch-action: manipulation;
+    touch-action: none;
     min-width: 280px;
     min-height: 200px;
+    /* Avoid flex-parent centering when geometry briefly unset */
+    margin: 0;
+    max-width: none;
   }
 
   .popup-titlebar {

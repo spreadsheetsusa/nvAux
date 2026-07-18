@@ -7,6 +7,8 @@ const CORNERS = ['nw', 'ne', 'sw', 'se'];
 /**
  * Multi-instance floating popup move + corner resize.
  * Move only from `.popup-titlebar` (not the whole panel).
+ * Owns left/top/width/height via element.style — do not also set those
+ * via a Svelte `style="…"` attribute (it would wipe geometry on update).
  *
  * @param {HTMLElement} node
  * @param {{
@@ -53,12 +55,19 @@ export function popupFrame(node, params = {}) {
     return el;
   });
 
+  function isInteracting() {
+    return pendingMove || moving || resizing;
+  }
+
   function applyFrame() {
     node.style.position = 'fixed';
     node.style.left = `${Math.round(left)}px`;
     node.style.top = `${Math.round(top)}px`;
     node.style.width = `${Math.round(width)}px`;
     node.style.height = `${Math.round(height)}px`;
+    node.style.margin = '0';
+    node.style.maxWidth = 'none';
+    node.style.transform = 'none';
   }
 
   function emitFrame() {
@@ -84,6 +93,18 @@ export function popupFrame(node, params = {}) {
     node.style.willChange = 'left, top, width, height';
     document.body.classList.add('is-panel-resizing');
     document.body.style.cursor = cursor;
+  }
+
+  /** Re-sync internal state from the live box (guards against style wipes). */
+  function syncFromDom() {
+    const rect = node.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      left = rect.left;
+      top = rect.top;
+      width = Math.round(rect.width);
+      height = Math.round(rect.height);
+    }
+    applyFrame();
   }
 
   function isTitlebar(target) {
@@ -114,6 +135,7 @@ export function popupFrame(node, params = {}) {
     if (moving || resizing) {
       suppressClick = true;
       clearInteractionChrome();
+      applyFrame();
       emitFrame();
     }
     pendingMove = false;
@@ -131,6 +153,8 @@ export function popupFrame(node, params = {}) {
 
     event.preventDefault();
     event.stopPropagation();
+
+    syncFromDom();
 
     resizing = true;
     resizeCorner = corner;
@@ -157,6 +181,8 @@ export function popupFrame(node, params = {}) {
     }
     if (event.button != null && event.button !== 0) return;
     if (!isTitlebar(event.target)) return;
+
+    syncFromDom();
 
     pendingMove = true;
     moving = false;
@@ -248,6 +274,12 @@ export function popupFrame(node, params = {}) {
       if (dx * dx + dy * dy < threshold * threshold) return;
       moving = true;
       pendingMove = false;
+      // Re-anchor in case a reactive style update wiped geometry after pointerdown.
+      syncFromDom();
+      startLeft = left;
+      startTop = top;
+      startClientX = event.clientX;
+      startClientY = event.clientY;
       try {
         node.setPointerCapture(event.pointerId);
       } catch {
@@ -257,7 +289,7 @@ export function popupFrame(node, params = {}) {
     }
 
     event.preventDefault();
-    applyMove(dx, dy);
+    applyMove(event.clientX - startClientX, event.clientY - startClientY);
   }
 
   function onPointerUp(event) {
@@ -281,6 +313,7 @@ export function popupFrame(node, params = {}) {
     resizeCorner = null;
     pointerId = null;
     clearInteractionChrome();
+    applyFrame();
     emitFrame();
   }
 
@@ -297,11 +330,13 @@ export function popupFrame(node, params = {}) {
     update(newParams = {}) {
       threshold = newParams.threshold ?? MOVE_THRESHOLD;
       onFrame = newParams.onFrame;
+      // Never let store/props overwrite geometry mid-drag/resize (or during pending move).
+      if (isInteracting()) return;
       if (typeof newParams.left === 'number') left = newParams.left;
       if (typeof newParams.top === 'number') top = newParams.top;
       if (typeof newParams.width === 'number') width = newParams.width;
       if (typeof newParams.height === 'number') height = newParams.height;
-      if (!moving && !resizing) applyFrame();
+      applyFrame();
     },
     destroy() {
       endInteraction();

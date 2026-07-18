@@ -26,9 +26,9 @@
     selectedNote,
     bodyText,
     markdownPreview,
-    db,
     openNoteByName,
     showStatusBar,
+    getWikiNoteNames,
   } from './store';
 
   import { debounce } from '../utils/debounce';
@@ -101,9 +101,19 @@
 
   let showPreview = $derived(canPreview && $markdownPreview);
 
-  let previewHtml = $derived(
-    showPreview ? marked.parse(toWikiPreviewMarkdown($bodyText || '')) : ''
-  );
+  let previewHtml = $state('');
+
+  $effect(() => {
+    if (!showPreview) {
+      previewHtml = '';
+      return;
+    }
+    const body = $bodyText || '';
+    const timeoutId = window.setTimeout(() => {
+      previewHtml = marked.parse(toWikiPreviewMarkdown(body));
+    }, 150);
+    return () => window.clearTimeout(timeoutId);
+  });
 
   let innerWidth = $state();
   let innerHeight = $state();
@@ -119,9 +129,6 @@
   let wikiLeft = $state(0);
   let wikiTop = $state(0);
 
-  /** Cached note titles while an open [[…]] span is active. */
-  /** @type {string[] | null} */
-  let wikiNameCache = null;
   let wikiSyncSeq = 0;
 
   function dismissWikiSuggest() {
@@ -129,15 +136,6 @@
     wikiVisible = false;
     wikiCandidates = [];
     wikiSelectedIndex = 0;
-    wikiNameCache = null;
-  }
-
-  async function ensureWikiNameCache() {
-    if (wikiNameCache) return wikiNameCache;
-    const database = await db();
-    const docs = await database.notes.find().exec();
-    wikiNameCache = docs.map((n) => n.name).filter(Boolean);
-    return wikiNameCache;
   }
 
   async function syncWikiSuggest() {
@@ -156,7 +154,7 @@
     const seq = ++wikiSyncSeq;
     wikiStart = open.start;
 
-    const names = await ensureWikiNameCache();
+    const names = await getWikiNoteNames();
     if (seq !== wikiSyncSeq) return;
 
     wikiCandidates = filterWikiSuggestions(names, open.query);
@@ -278,7 +276,7 @@
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
-        class="markdown-preview thin-scrollbar flex-1 min-h-0 overflow-y-auto"
+        class="markdown-preview thin-scrollbar flex-1 min-h-0 overflow-y-auto mt-3"
         onclick={handlePreviewClick}
       >
         {@html previewHtml}
@@ -288,7 +286,7 @@
         <textarea
           id="body-editor"
           bind:this={editorEl}
-          class="body-editor thin-scrollbar absolute inset-0 w-full h-full overflow-y-auto block no-resize border-0 outline-none border-box bg-transparent"
+          class="body-editor thin-scrollbar absolute inset-0 w-full h-full overflow-y-auto block no-resize border-0 outline-none border-box bg-transparent mt-3"
           bind:value={$bodyText}
           oninput={handleEditorInput}
           onkeydown={handleEditorKeydown}
@@ -338,6 +336,11 @@
     font-size: 14px;
     font-family: Arial, Helvetica, sans-serif;
     line-height: 1.5;
+  }
+
+  /* Match edit textarea: no extra top offset from first block's margin */
+  .markdown-preview :global(:first-child) {
+    margin-top: 0;
   }
 
   .markdown-preview :global(h1),

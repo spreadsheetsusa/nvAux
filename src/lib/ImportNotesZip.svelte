@@ -2,7 +2,7 @@
   import JSZip from 'jszip';
   import { v4 as uuidv4 } from 'uuid';
 
-  import { db } from './store';
+  import { db, invalidateWikiNoteNames } from './store';
 
   let db$;
 	let files;
@@ -24,6 +24,7 @@
                 createdAt: date,
                 updatedAt: date
               });
+              invalidateWikiNoteNames();
           }, (e) => {
             console.log('file.async error @@@@@@@@@@', e);
           });

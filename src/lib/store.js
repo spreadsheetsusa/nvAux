@@ -1,4 +1,4 @@
-import { writable } from 'svelte/store';
+import { writable, get } from 'svelte/store';
 import { v4 as uuidv4 } from 'uuid';
 
 import { addRxPlugin, createRxDatabase } from 'rxdb';
@@ -39,8 +39,14 @@ const storedWindowed = (() => {
   }
   return false;
 })();
+/** Matches StatusBar / mobile drawer breakpoint. */
+export const MOBILE_BREAKPOINT = 768;
+const mobileMq =
+  typeof window !== 'undefined'
+    ? window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`)
+    : null;
 const storedShowClock = JSON.parse(localStorage.getItem('showClock')) || "true";
-const storedShowStatusBar = readStoredBool('showStatusBar', true);
+const storedShowStatusBar = readStoredBool('showStatusBar', false);
 const storedSidebarOpen = readStoredBool('sidebarOpen', false);
 const storedBirthDate = localStorage.getItem('birthDate') || '1982-05-24';
 const storedExpectedLongevity = localStorage.getItem('expectedLongevity') || '80';
@@ -61,12 +67,34 @@ const storedLifeCalendarStat = LIFE_CALENDAR_STATS.includes(localStorage.getItem
   ? localStorage.getItem('lifeCalendarStat')
   : 'title';
 
+export const DEFAULT_ACCENT_COLOR = '#ed0178';
+export const ACCENT_COLOR_PRESETS = [
+  '#ed0178',
+  '#2252a0',
+  '#0f766e',
+  '#c2410c',
+  '#7c3aed',
+];
+
+/** @param {unknown} raw */
+function normalizeAccentColor(raw) {
+  if (typeof raw !== 'string') return DEFAULT_ACCENT_COLOR;
+  const v = raw.trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(v)) return v.toLowerCase();
+  return DEFAULT_ACCENT_COLOR;
+}
+
+const storedAccentColor = normalizeAccentColor(localStorage.getItem('accentColor'));
+
 /**
  * RxDB ************************************************************************
  */
 
 /** Bumped with RxDB 17 schema (indexed fields must be required). */
 const DB_NAME = 'nvauxdb17';
+
+/** Seeded Settings note — also the target for preference `updatedAt` bumps. */
+export const SETTINGS_GUID = '00000000-0000-0000-0000-000000000000';
 
 let dbPromise;
 
@@ -94,7 +122,7 @@ const _create = async () => {
   await db.addCollections({ notes: { schema } });
 
   const WELCOME_GUID = '11111111-1111-1111-1111-111111111111';
-  const SETTINGS_GUID = '00000000-0000-0000-0000-000000000000';
+  const TECHNO_LEAGUE_GUID = '22222222-2222-2222-2222-222222222222';
 
   const welcomeNote = await db.notes.findOne(WELCOME_GUID).exec();
   if (!welcomeNote) {
@@ -132,6 +160,29 @@ Don't forget to follow the project on 𝕏 at @nvAuxApp and let us know what you
     });
   }
 
+  const technoLeagueNote = await db.notes.findOne(TECHNO_LEAGUE_GUID).exec();
+  if (!technoLeagueNote) {
+    await db.notes.insert({
+      guid: TECHNO_LEAGUE_GUID,
+      name: "🎧 The Gentleman's Techno League - EP1",
+      body: `This note demonstrates soundcloud integration. Any notes containing soundcloud links will be detected and you'll see player/playlist buttons just above this paragraph. The media player is independant of any selected note, so feel free to queue up tracks across many notes and keep hustling.
+
+# Episode 1
+
+1. [Paluma Sound - Real Flow](https://soundcloud.com/chezcritique/paluma-sound-real-flow?in=frankneuro/sets/gentlemens-techno-league/)
+2. [Ross From Friends - Talk To Me, You'll Understand](https://soundcloud.com/rossfromfriends/talk-to-me-youll-understand?in=frankneuro/sets/gentlemens-techno-league/)
+3. [octn - on2 4u](https://soundcloud.com/octn/on2-4u?in=frankneuro/sets/gentlemens-techno-league/)
+4. [Forcesupreme - Mojito](https://soundcloud.com/forcesupreme-music/forcesupreme-mojito?in=frankneuro/sets/gentlemens-techno-league/)
+
+---
+
+The current implementation is basic. There are future plans to support the full soundcloud api with ability to download and store media automatically.
+`,
+      createdAt: new Date().getTime(),
+      updatedAt: new Date().getTime(),
+    });
+  }
+
   return db;
 };
 
@@ -146,6 +197,15 @@ export const db = () => {
   return dbPromise;
 };
 
+/** Wipe IndexedDB + prefs so the next open re-seeds the default notes. */
+export async function resetDatabase() {
+  const database = await db();
+  await database.remove();
+  dbPromise = undefined;
+  localStorage.clear();
+  invalidateWikiNoteNames();
+}
+
 /**
  * Svelte Writables ************************************************************
  */
@@ -159,15 +219,39 @@ export const selectedNote = writable({});
 export const bodyText = writable('');
 export const markdownPreview = writable(false);
 export const fullScreen = writable(storedFullScreen);
-/** App Mode floating window (vs edge-to-edge fullscreen). */
+/** App Mode floating window (vs edge-to-edge fullscreen). Desktop only. */
 export const windowed = writable(storedWindowed);
+/** True when viewport is at or below {@link MOBILE_BREAKPOINT}. */
+export const isMobile = writable(mobileMq ? mobileMq.matches : false);
 export const showClock = writable(storedShowClock);
 export const showStatusBar = writable(storedShowStatusBar);
 export const sidebarOpen = writable(storedSidebarOpen);
+
+if (mobileMq) {
+  const syncMobile = () => isMobile.set(mobileMq.matches);
+  // Safari < 14 used addListener; prefer addEventListener.
+  if (typeof mobileMq.addEventListener === 'function') {
+    mobileMq.addEventListener('change', syncMobile);
+  } else if (typeof mobileMq.addListener === 'function') {
+    mobileMq.addListener(syncMobile);
+  }
+}
+
+// Windowed is desktop-only — drop it as soon as we enter a mobile viewport.
+isMobile.subscribe((mobile) => {
+  if (mobile) windowed.set(false);
+});
 export const birthDate = writable(storedBirthDate);
 export const expectedLongevity = writable(storedExpectedLongevity);
 export const lifeCalendarStat = writable(storedLifeCalendarStat);
 export const LIFE_CALENDAR_STAT_MODES = LIFE_CALENDAR_STATS;
+export const accentColor = writable(storedAccentColor);
+
+accentColor.subscribe((v) => {
+  if (typeof document !== 'undefined') {
+    document.documentElement.style.setProperty('--app-accent', normalizeAccentColor(v));
+  }
+});
 /** Height of the media player bar under the Omnibar (0 when hidden). */
 export const mediaPlayerHeight = writable(0);
 
@@ -185,10 +269,25 @@ export const mediaPlayerHeight = writable(0);
  */
 export const notePopups = writable([]);
 
+/** Z-order for the main App Windowed card (competes with note popups). */
+export const mainWindowZIndex = writable(10);
+
 const POPUP_DEFAULT_W = 420;
 const POPUP_DEFAULT_H = 320;
 const POPUP_CASCADE = 28;
-let notePopupZCounter = 40;
+/** Shared front-to-back counter for main window + note popups (macOS-style). */
+let windowStackZ = 10;
+
+function nextWindowZ() {
+  windowStackZ += 1;
+  return windowStackZ;
+}
+
+/** Bring the main app window above all note popups. */
+export function raiseMainWindow() {
+  if (get(mainWindowZIndex) === windowStackZ) return;
+  mainWindowZIndex.set(nextWindowZ());
+}
 
 /**
  * Open a floating note popup for guid (App Windowed). One per guid — reopens raise existing.
@@ -201,12 +300,12 @@ export function openNotePopup(guid) {
     const existing = list.find((p) => p.guid === guid);
     if (existing) {
       raised = true;
-      notePopupZCounter += 1;
+      const z = nextWindowZ();
       return list.map((p) =>
-        p.id === existing.id ? { ...p, zIndex: notePopupZCounter } : p
+        p.id === existing.id ? { ...p, zIndex: z } : p
       );
     }
-    notePopupZCounter += 1;
+    const z = nextWindowZ();
     const index = list.length;
     const width = POPUP_DEFAULT_W;
     const height = POPUP_DEFAULT_H;
@@ -227,7 +326,7 @@ export function openNotePopup(guid) {
         top,
         width,
         height,
-        zIndex: notePopupZCounter,
+        zIndex: z,
       },
     ];
   });
@@ -244,16 +343,16 @@ export function closeAllNotePopups() {
   notePopups.set([]);
 }
 
-/** @param {string} id */
+/** Bring a note popup above the main window and all other popups. */
 export function raiseNotePopup(id) {
   if (!id) return;
   notePopups.update((list) => {
     const target = list.find((p) => p.id === id);
     if (!target) return list;
-    notePopupZCounter += 1;
-    return list.map((p) =>
-      p.id === id ? { ...p, zIndex: notePopupZCounter } : p
-    );
+    // Already the global frontmost window — skip store churn mid-drag.
+    if (target.zIndex === windowStackZ) return list;
+    const z = nextWindowZ();
+    return list.map((p) => (p.id === id ? { ...p, zIndex: z } : p));
   });
 }
 
@@ -317,9 +416,30 @@ export async function openNoteByName(name) {
     createdAt: new Date().getTime(),
     updatedAt: new Date().getTime(),
   });
+  invalidateWikiNoteNames();
   selectedNote.set(note);
   bodyText.set('');
   return note;
+}
+
+/** @type {string[] | null} */
+let wikiNoteNamesCache = null;
+
+/** Drop cached note titles (call after create / rename / delete). */
+export function invalidateWikiNoteNames() {
+  wikiNoteNamesCache = null;
+}
+
+/**
+ * Note titles for wiki-link autocomplete. Cached until invalidated.
+ * @returns {Promise<string[]>}
+ */
+export async function getWikiNoteNames() {
+  if (wikiNoteNamesCache) return wikiNoteNamesCache;
+  const database = await db();
+  const docs = await database.notes.find().exec();
+  wikiNoteNamesCache = docs.map((n) => n.name).filter(Boolean);
+  return wikiNoteNamesCache;
 }
 
 omniText.subscribe(v => {
@@ -332,12 +452,50 @@ omniText.subscribe(v => {
 
 noteListHeight.subscribe(v => localStorage.setItem('noteListHeight', v.toString()));
 sidebarWidth.subscribe(v => localStorage.setItem('sidebarWidth', v.toString()));
-
-fullScreen.subscribe(v => localStorage.setItem('fullScreen', JSON.stringify(v)));
-windowed.subscribe(v => localStorage.setItem('windowed', JSON.stringify(v)));
-showClock.subscribe(v => localStorage.setItem('showClock', v));
-showStatusBar.subscribe(v => localStorage.setItem('showStatusBar', JSON.stringify(v)));
 sidebarOpen.subscribe(v => localStorage.setItem('sidebarOpen', JSON.stringify(v)));
-birthDate.subscribe(v => localStorage.setItem('birthDate', v));
-expectedLongevity.subscribe(v => localStorage.setItem('expectedLongevity', v));
-lifeCalendarStat.subscribe(v => localStorage.setItem('lifeCalendarStat', v));
+
+/** Debounced bump of the Settings note so the list timestamp reflects last preference change. */
+let touchSettingsNoteTimer;
+function touchSettingsNote() {
+  clearTimeout(touchSettingsNoteTimer);
+  touchSettingsNoteTimer = setTimeout(async () => {
+    try {
+      const database = await db();
+      const note = await database.notes.findOne(SETTINGS_GUID).exec();
+      if (!note) return;
+      await note.incrementalModify((data) => {
+        data.updatedAt = Date.now();
+        return data;
+      });
+    } catch {
+      // DB may still be opening, or collection reset mid-flight.
+    }
+  }, 300);
+}
+
+/**
+ * Persist a preference to localStorage; after the initial subscribe, bump Settings `updatedAt`.
+ * @param {import('svelte/store').Readable<any>} store
+ * @param {string} key
+ * @param {(v: any) => string} serialize
+ */
+function persistPreference(store, key, serialize) {
+  let ready = false;
+  store.subscribe((v) => {
+    localStorage.setItem(key, serialize(v));
+    if (!ready) {
+      ready = true;
+      return;
+    }
+    touchSettingsNote();
+  });
+}
+
+persistPreference(fullScreen, 'fullScreen', (v) => JSON.stringify(v));
+persistPreference(windowed, 'windowed', (v) => JSON.stringify(v));
+persistPreference(showClock, 'showClock', (v) => String(v));
+persistPreference(showStatusBar, 'showStatusBar', (v) => JSON.stringify(v));
+persistPreference(birthDate, 'birthDate', (v) => v);
+persistPreference(expectedLongevity, 'expectedLongevity', (v) => v);
+persistPreference(lifeCalendarStat, 'lifeCalendarStat', (v) => v);
+persistPreference(accentColor, 'accentColor', (v) => normalizeAccentColor(v));

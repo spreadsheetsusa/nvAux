@@ -1,12 +1,28 @@
 <script>
   import { differenceInYears } from 'date-fns';
-  import { db, windowed, showClock, showStatusBar, fullScreen, birthDate, expectedLongevity } from './store';
+  import {
+    db,
+    windowed,
+    showClock,
+    showStatusBar,
+    fullScreen,
+    birthDate,
+    expectedLongevity,
+    isMobile,
+    resetDatabase,
+    accentColor,
+    ACCENT_COLOR_PRESETS,
+  } from './store';
 
   import DownloadNotesZip from './DownloadNotesZip.svelte';
   import ImportNotesZip from './ImportNotesZip.svelte';
   import AbstractlyLogo from './AbstractlyLogo.svelte';
 
   const LONGEVITY_MAX = 120;
+
+  let resetConfirming = $state(false);
+  let resetting = $state(false);
+  let resetError = $state('');
 
   /** @param {string} iso YYYY-MM-DD in local time (avoids UTC parse shift) */
   function parseLocalDate(iso) {
@@ -34,13 +50,24 @@
     }
   });
 
-  const handleDeleteCollection = async () => {
-    const db$ = await db();
-    // db$.notes.destroy();
-    localStorage.clear();
-    db$.notes.remove();
-    location.reload();
-  };
+  function cancelReset() {
+    if (resetting) return;
+    resetConfirming = false;
+    resetError = '';
+  }
+
+  async function confirmReset() {
+    if (resetting) return;
+    resetting = true;
+    resetError = '';
+    try {
+      await resetDatabase();
+      location.reload();
+    } catch (err) {
+      resetError = err?.message || 'Reset failed. Try again.';
+      resetting = false;
+    }
+  }
 </script>
 
 <div class="text-white h-full" style="padding: 5px 15px; margin: 0;">
@@ -66,8 +93,42 @@
       <div style="margin-top: 15px;">
         <label for="fullScreen"><input id="fullScreen" type="checkbox" bind:checked={$fullScreen} /> App Mode</label>
       </div>
-      <div style="margin-top: 3px; margin-left: 15px; opacity: {$fullScreen ? 1 : 0.5}">
-        <label for="windowed"><input id="windowed" type="checkbox" disabled={!$fullScreen} bind:checked={$windowed} /> Windowed</label>
+      <div style="margin-top: 3px; margin-left: 15px; opacity: {$fullScreen && !$isMobile ? 1 : 0.5}">
+        <label for="windowed">
+          <input
+            id="windowed"
+            type="checkbox"
+            disabled={!$fullScreen || $isMobile}
+            bind:checked={$windowed}
+          />
+          Windowed{$isMobile ? ' (desktop only)' : ''}
+        </label>
+      </div>
+      <div style="margin-top: 15px;">
+        <label for="accentColor">Accent color</label>
+        <div class="flex items-center accent-color-row" style="margin-top: 8px;">
+          <input
+            id="accentColor"
+            class="settings-input settings-color"
+            type="color"
+            bind:value={$accentColor}
+          />
+          <div class="flex items-center accent-presets" role="group" aria-label="Accent color presets">
+            {#each ACCENT_COLOR_PRESETS as preset (preset)}
+              <button
+                type="button"
+                class="accent-preset"
+                class:accent-preset-selected={$accentColor.toLowerCase() === preset}
+                style:background={preset}
+                aria-label="Set accent to {preset}"
+                aria-pressed={$accentColor.toLowerCase() === preset}
+                onclick={() => {
+                  $accentColor = preset;
+                }}
+              ></button>
+            {/each}
+          </div>
+        </div>
       </div>
     </div>
 
@@ -112,12 +173,46 @@
     <div style="border: 1px solid #673132; border-radius: 8px; margin-top: 20px; padding: 15px; background: #242021;">
       <div class="font-bold">Dangerzone</div>
 
-      <button
-        aria-label="Reset Database"
-        onclick={handleDeleteCollection}
-        class="btn"
-        style="background: #b41111; margin-top: 10px;">Reset Database</button
-      >
+      {#if resetConfirming}
+        <p class="text-gray-400" style="margin-top: 10px; font-size: 13px; line-height: 1.4;">
+          Deletes all notes and restores the three seeded defaults. Preferences reset too.
+        </p>
+        <div class="flex flex-wrap items-center" style="gap: 8px; margin-top: 12px;">
+          <button
+            aria-label="Confirm Reset Database"
+            class="btn"
+            style="background: #b41111;"
+            disabled={resetting}
+            onclick={confirmReset}
+          >
+            {resetting ? 'Resetting…' : 'Confirm Reset'}
+          </button>
+          <button
+            aria-label="Cancel Reset Database"
+            class="btn"
+            style="background: #3a3d42;"
+            disabled={resetting}
+            onclick={cancelReset}
+          >
+            Cancel
+          </button>
+        </div>
+        {#if resetError}
+          <p style="color: #f87171; margin-top: 10px; font-size: 13px;">{resetError}</p>
+        {/if}
+      {:else}
+        <button
+          aria-label="Reset Database"
+          class="btn"
+          style="background: #b41111; margin-top: 10px;"
+          onclick={() => {
+            resetConfirming = true;
+            resetError = '';
+          }}
+        >
+          Reset Database
+        </button>
+      {/if}
     </div>
   </div>
 
@@ -165,6 +260,46 @@
   .settings-input[type='date']::-webkit-calendar-picker-indicator {
     filter: invert(0.7);
     cursor: pointer;
+  }
+
+  .settings-color {
+    width: 40px;
+    height: 32px;
+    padding: 2px 4px;
+    cursor: pointer;
+  }
+
+  .accent-color-row {
+    gap: 12px;
+  }
+
+  .accent-presets {
+    gap: 8px;
+  }
+
+  .accent-preset {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    padding: 0;
+    cursor: pointer;
+    flex-shrink: 0;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  }
+
+  .accent-preset:hover {
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+  }
+
+  .accent-preset-selected {
+    border-color: #e5e7eb;
+    box-shadow: 0 0 0 1px #1a1c1e;
+  }
+
+  .accent-preset:focus-visible {
+    outline: 2px solid #404856;
+    outline-offset: 2px;
   }
 
   .settings-range {

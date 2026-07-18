@@ -2,7 +2,6 @@ import { get, writable } from 'svelte/store';
 import { v4 as uuidv4 } from 'uuid';
 
 import { extractMediaLinks } from '../utils/extractMediaLinks';
-import { mediaPlayerHeight } from './store';
 
 /**
  * @typedef {{
@@ -10,6 +9,7 @@ import { mediaPlayerHeight } from './store';
  *   url: string,
  *   noteGuid: string,
  *   noteName: string,
+ *   label?: string,
  *   played: boolean
  * }} MediaTrack
  */
@@ -25,6 +25,15 @@ export const mediaTrackIndex = writable(0);
  * AudioPlayer watches this token.
  */
 export const mediaPlayRequest = writable(0);
+
+/**
+ * Cheap presence check for toolbar visibility (avoids full URL extraction on each keystroke).
+ * @param {string | null | undefined} text
+ * @returns {boolean}
+ */
+export function hasSoundCloudLinks(text) {
+  return /soundcloud\.com|snd\.sc/i.test(text || '');
+}
 
 /**
  * @param {string | null | undefined} text
@@ -43,16 +52,21 @@ export function soundcloudUrlsFrom(text) {
  * @returns {MediaTrack[]}
  */
 export function buildTracksFromNote(note, body) {
-  const urls = soundcloudUrlsFrom(body);
+  const links = extractMediaLinks(body).filter((l) => l.provider === 'soundcloud');
   const noteGuid = note?.guid ?? '';
   const noteName = note?.name ?? 'Untitled';
-  return urls.map((url) => ({
-    id: uuidv4(),
-    url,
-    noteGuid,
-    noteName,
-    played: false,
-  }));
+  return links.map((link) => {
+    /** @type {MediaTrack} */
+    const track = {
+      id: uuidv4(),
+      url: link.url,
+      noteGuid,
+      noteName,
+      played: false,
+    };
+    if (link.label) track.label = link.label;
+    return track;
+  });
 }
 
 /**
@@ -136,7 +150,6 @@ export function mediaPlayNow(tracks) {
 export function mediaClearSession() {
   mediaPlaylist.set([]);
   mediaTrackIndex.set(0);
-  mediaPlayerHeight.set(0);
 }
 
 /**
