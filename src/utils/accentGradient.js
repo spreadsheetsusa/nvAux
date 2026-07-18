@@ -77,30 +77,47 @@ function hslToHex({ h, s, l }) {
 }
 
 /**
+ * Shortest-arc blend of `from` toward `to` by factor `t` (0..1).
+ * @param {number} from
+ * @param {number} to
+ * @param {number} t
+ */
+function hueToward(from, to, t) {
+  const d = ((((to - from) % 360) + 540) % 360) - 180;
+  return from + d * clamp01(t);
+}
+
+/**
  * @param {string} accentHex
  * @param {{ dark?: boolean }} [opts]
  * @returns {[string, string, string, string]}
  */
 export function gradientStopsFromAccent(accentHex, { dark = false } = {}) {
   const { h, s } = hexToHsl(accentHex);
-  // Keep chroma lively even for muted accents; dark mode stays deeper.
-  const baseS = dark ? clamp01(Math.max(0.28, s * 0.72)) : clamp01(Math.max(0.42, Math.min(0.78, s * 0.9 + 0.12)));
+  // Soft, desaturated wash — accent still seeds hue without neon chroma.
+  const baseS = dark
+    ? clamp01(Math.max(0.16, s * 0.42))
+    : clamp01(Math.max(0.24, Math.min(0.48, s * 0.48 + 0.05)));
 
-  // Stops: warm neighbor → accent seed → cool companion → cold desaturated blue.
+  // Cool stops pull toward sky/slate instead of complement (avoids green on pinks).
+  const coolH = hueToward(h, 205, 0.7);
+  const slateH = hueToward(h, 220, 0.85);
+
+  // Stops: warm neighbor → accent seed → cool sky → soft slate.
   if (dark) {
     return [
-      hslToHex({ h: h - 24, s: baseS, l: 0.3 }),
-      hslToHex({ h, s: clamp01(baseS + 0.06), l: 0.28 }),
-      hslToHex({ h: h + 168, s: clamp01(baseS * 0.85), l: 0.26 }),
-      hslToHex({ h: h + 245, s: clamp01(baseS * 0.5), l: 0.28 }),
+      hslToHex({ h: h - 22, s: baseS, l: 0.3 }),
+      hslToHex({ h, s: clamp01(baseS + 0.04), l: 0.28 }),
+      hslToHex({ h: coolH, s: clamp01(baseS * 0.62), l: 0.26 }),
+      hslToHex({ h: slateH, s: clamp01(baseS * 0.36), l: 0.28 }),
     ];
   }
 
   return [
-    hslToHex({ h: h - 26, s: clamp01(baseS * 0.95), l: 0.64 }),
-    hslToHex({ h, s: clamp01(baseS + 0.05), l: 0.58 }),
-    hslToHex({ h: h + 170, s: clamp01(baseS * 0.72), l: 0.74 }),
-    hslToHex({ h: h + 245, s: clamp01(baseS * 0.42), l: 0.66 }),
+    hslToHex({ h: h - 22, s: clamp01(baseS * 0.88), l: 0.7 }),
+    hslToHex({ h, s: clamp01(baseS + 0.02), l: 0.64 }),
+    hslToHex({ h: coolH, s: clamp01(baseS * 0.48), l: 0.78 }),
+    hslToHex({ h: slateH, s: clamp01(baseS * 0.3), l: 0.72 }),
   ];
 }
 

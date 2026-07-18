@@ -5,6 +5,7 @@
   import { cubicOut } from 'svelte/easing';
   import {
     mediaPlayerHeight,
+    mediaViewerHeight,
     selectNoteByGuid,
     isMobile,
   } from './store';
@@ -17,7 +18,9 @@
     mediaReorderTrack,
     mediaAdvanceAfterFinish,
     mediaJumpTo,
+    mediaTrackProvider,
   } from './mediaSession';
+  import MediaViewer from './media/MediaViewer.svelte';
 
   const PLAYER_HEIGHT = 40;
   const PLAYER_SLIDE = { duration: 250, easing: cubicOut };
@@ -84,6 +87,9 @@
   let trackIndex = $derived($mediaTrackIndex);
   let currentTrack = $derived(playlist[trackIndex] ?? null);
   let currentUrl = $derived(currentTrack?.url ?? '');
+  let provider = $derived(mediaTrackProvider(currentTrack));
+  let isSoundCloud = $derived(provider === 'soundcloud');
+  let isVisual = $derived(provider === 'image' || provider === 'video');
   let visible = $derived(playlist.length > 0);
   let hasMultiple = $derived(playlist.length > 1);
   let canPrev = $derived(trackIndex > 0);
@@ -95,6 +101,10 @@
   let playlistOpen = $state(false);
   let dragFromIndex = $state(-1);
   let dragOverIndex = $state(-1);
+
+  /** @type {HTMLVideoElement | null} */
+  let videoEl = $state(null);
+  let visualAutoplay = $state(false);
 
   let iframeEl = $state(null);
   /** Widget API instance — raw so Svelte does not proxy the third-party object. */
@@ -134,16 +144,22 @@
   let seekMax = $derived(Math.max(durationMs, 1));
   let seekValue = $derived(Math.min(positionMs, seekMax));
 
+  function shellHeight() {
+    return PLAYER_HEIGHT + (isVisual ? $mediaViewerHeight : 0);
+  }
+
   $effect(() => {
     if (visible) {
-      mediaPlayerHeight.set(PLAYER_HEIGHT);
+      void $mediaViewerHeight;
+      void isVisual;
+      mediaPlayerHeight.set(shellHeight());
     } else {
       playlistOpen = false;
     }
   });
 
   function onPlayerIntro() {
-    mediaPlayerHeight.set(PLAYER_HEIGHT);
+    mediaPlayerHeight.set(shellHeight());
   }
 
   function onPlayerOutroEnd() {
@@ -154,6 +170,15 @@
   $effect(() => {
     const token = $mediaPlayRequest;
     if (!token) return;
+    if (untrack(() => isVisual)) {
+      visualAutoplay = true;
+      if (untrack(() => provider) === 'video') {
+        const el = untrack(() => videoEl);
+        el?.play?.().catch(() => {});
+        isPlaying = true;
+      }
+      return;
+    }
     playAfterLoad = true;
     const activeWidget = untrack(() => widget);
     const url = untrack(() => currentUrl);
@@ -167,7 +192,8 @@
   $effect(() => {
     const url = currentUrl;
     const label = currentTrack?.label;
-    if (!url) {
+    const sc = isSoundCloud;
+    if (!url || !sc) {
       oembedTitle = '';
       return;
     }
@@ -192,6 +218,30 @@
     return () => {
       cancelled = true;
     };
+  });
+
+  // Reset visual autoplay when the current track changes.
+  $effect(() => {
+    void currentUrl;
+    visualAutoplay = false;
+  });
+
+  // Pause / tear down SoundCloud widget while viewing image/video tracks.
+  $effect(() => {
+    if (isSoundCloud) return;
+    const activeWidget = untrack(() => widget);
+    try {
+      activeWidget?.pause?.();
+    } catch {
+      /* ignore */
+    }
+    widget = null;
+    widgetBound = false;
+    loadedUrl = '';
+    isPlaying = false;
+    positionMs = 0;
+    durationMs = 0;
+    ready = true;
   });
 
   // Overflow-aware marquee: scroll only when the combined title doesn't fit.
@@ -257,12 +307,13 @@
     });
   }
 
-  // Create the widget once when the iframe mounts with a track available.
+  // Create the widget once when the iframe mounts with a SoundCloud track available.
   $effect(() => {
     const el = iframeEl;
     const url = currentUrl;
+    const sc = isSoundCloud;
 
-    if (!el || !url) {
+    if (!el || !url || !sc) {
       return;
     }
 
@@ -293,12 +344,13 @@
     };
   });
 
-  // Load a different track without remounting the iframe / rebinding events.
+  // Load a different SoundCloud track without remounting the iframe / rebinding events.
   $effect(() => {
     const url = currentUrl;
     const activeWidget = widget;
+    const sc = isSoundCloud;
 
-    if (!url || !activeWidget) return;
+    if (!url || !activeWidget || !sc) return;
     if (url === loadedUrl) return;
 
     let cancelled = false;
@@ -363,20 +415,44 @@
   });
 
   function togglePlay() {
+    if (provider === 'video') {
+      const el = videoEl;
+      if (!el) return;
+      if (el.paused) {
+        el.play?.().catch(() => {});
+        isPlaying = true;
+      } else {
+        el.pause?.();
+        isPlaying = false;
+      }
+      return;
+    }
+    if (provider === 'image') {
+      if (canNext) goNext();
+      return;
+    }
     if (!widget || !ready) return;
     if (isPlaying) widget.pause();
     else widget.play();
   }
 
+  function onVisualEnded() {
+    isPlaying = false;
+    const advanced = mediaAdvanceAfterFinish();
+    if (advanced) visualAutoplay = true;
+  }
+
   function goPrev() {
     if (!canPrev) return;
-    playAfterLoad = isPlaying;
+    if (isSoundCloud) playAfterLoad = isPlaying;
+    else visualAutoplay = provider === 'video' && isPlaying;
     mediaJumpTo(trackIndex - 1, false);
   }
 
   function goNext() {
     if (!canNext) return;
-    playAfterLoad = isPlaying;
+    if (isSoundCloud) playAfterLoad = isPlaying;
+    else visualAutoplay = provider === 'video' && isPlaying;
     mediaJumpTo(trackIndex + 1, false);
   }
 
@@ -452,27 +528,40 @@
     onintrostart={onPlayerIntro}
     onoutroend={onPlayerOutroEnd}
   >
+    {#if isVisual && currentUrl}
+      <MediaViewer
+        {provider}
+        url={currentUrl}
+        label={trackPart}
+        autoplay={visualAutoplay}
+        bind:videoEl
+        onEnded={onVisualEnded}
+      />
+    {/if}
+
     <div
       class="audio-player px-2 flex items-center gap-2 w-full"
       style="height: {PLAYER_HEIGHT}px; background: var(--app-statusbar-background); border-bottom: 1px solid var(--app-statusbar-border); color: #8a8a8a;"
       role="region"
-      aria-label={displayTitle ? `Audio player: ${displayTitle}` : 'Audio player'}
+      aria-label={displayTitle ? `Media player: ${displayTitle}` : 'Media player'}
     >
-      <iframe
-        bind:this={iframeEl}
-        title="SoundCloud widget"
-        allow="autoplay"
-        class="sc-widget-host"
-        scrolling="no"
-        frameborder="no"
-      ></iframe>
+      {#if isSoundCloud}
+        <iframe
+          bind:this={iframeEl}
+          title="SoundCloud widget"
+          allow="autoplay"
+          class="sc-widget-host"
+          scrolling="no"
+          frameborder="no"
+        ></iframe>
+      {/if}
 
       {#if hasMultiple}
         <button
           type="button"
           class="nav-btn flex-shrink-0"
           onclick={goPrev}
-          disabled={!canPrev || !ready}
+          disabled={!canPrev || (isSoundCloud && !ready)}
           aria-label="Previous track"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -485,8 +574,8 @@
         type="button"
         class="play-btn flex-shrink-0"
         onclick={togglePlay}
-        disabled={!ready}
-        aria-label={isPlaying ? 'Pause' : 'Play'}
+        disabled={isSoundCloud ? !ready : provider === 'image' ? !canNext : false}
+        aria-label={provider === 'image' ? 'Next' : isPlaying ? 'Pause' : 'Play'}
       >
         {#if isPlaying}
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -505,7 +594,7 @@
           type="button"
           class="nav-btn flex-shrink-0"
           onclick={goNext}
-          disabled={!canNext || !ready}
+          disabled={!canNext || (isSoundCloud && !ready)}
           aria-label="Next track"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -543,41 +632,45 @@
         </div>
       {/if}
 
-      <span class="time flex-shrink-0" aria-label="Current time">{currentLabel}</span>
+      {#if isSoundCloud}
+        <span class="time flex-shrink-0" aria-label="Current time">{currentLabel}</span>
 
-      <input
-        type="range"
-        class="seek flex-grow min-w-0"
-        min="0"
-        max={seekMax}
-        step="100"
-        value={seekValue}
-        disabled={!ready}
-        oninput={onSeekInput}
-        onchange={onSeekChange}
-        aria-label="Seek"
-      />
+        <input
+          type="range"
+          class="seek flex-grow min-w-0"
+          min="0"
+          max={seekMax}
+          step="100"
+          value={seekValue}
+          disabled={!ready}
+          oninput={onSeekInput}
+          onchange={onSeekChange}
+          aria-label="Seek"
+        />
 
-      <span class="time flex-shrink-0" aria-label="Duration">{durationLabel}</span>
+        <span class="time flex-shrink-0" aria-label="Duration">{durationLabel}</span>
 
-      {#if !$isMobile}
-        <label class="volume flex items-center flex-shrink-0" title="Volume">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path
-              d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"
+        {#if !$isMobile}
+          <label class="volume flex items-center flex-shrink-0" title="Volume">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path
+                d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"
+              />
+            </svg>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value={volume}
+              oninput={onVolumeInput}
+              aria-label="Volume"
+              disabled={!ready}
             />
-          </svg>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            step="1"
-            value={volume}
-            oninput={onVolumeInput}
-            aria-label="Volume"
-            disabled={!ready}
-          />
-        </label>
+          </label>
+        {/if}
+      {:else}
+        <div class="visual-spacer flex-grow min-w-0"></div>
       {/if}
 
       <button

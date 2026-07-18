@@ -29,6 +29,7 @@
     openNoteByName,
     showStatusBar,
     getWikiNoteNames,
+    syncMarkdownPreviewForNoteType,
   } from './store';
 
   import { debounce } from '../utils/debounce';
@@ -45,6 +46,8 @@
   import Settings from './Settings.svelte';
   import WikiLinkSuggest from './WikiLinkSuggest.svelte';
   import NoteToolbar from './NoteToolbar.svelte';
+  import { resolveNoteType } from './noteTypes/resolveNoteType';
+  import KanbanBoard from './noteTypes/kanban/KanbanBoard.svelte';
 
   hljs.registerLanguage('bash', bash);
   hljs.registerLanguage('c', c);
@@ -93,18 +96,19 @@
       $selectedNote.guid !== SETTINGS_GUID
   );
 
-  $effect(() => {
-    if (!canPreview && $markdownPreview) {
-      markdownPreview.set(false);
-    }
-  });
-
   let showPreview = $derived(canPreview && $markdownPreview);
+  let noteType = $derived(resolveNoteType($selectedNote, $bodyText));
+  let showMarkdownPreview = $derived(showPreview && noteType === 'markdown');
+  let showKanban = $derived(showPreview && noteType === 'kanban');
+
+  $effect(() => {
+    syncMarkdownPreviewForNoteType(noteType);
+  });
 
   let previewHtml = $state('');
 
   $effect(() => {
-    if (!showPreview) {
+    if (!showMarkdownPreview) {
       previewHtml = '';
       return;
     }
@@ -114,6 +118,11 @@
     }, 150);
     return () => window.clearTimeout(timeoutId);
   });
+
+  function handleKanbanChange(nextBody) {
+    bodyText.set(nextBody);
+    handleDebounceSave();
+  }
 
   let innerWidth = $state();
   let innerHeight = $state();
@@ -271,7 +280,9 @@
     </div>
   {:else}
     <NoteToolbar />
-    {#if showPreview}
+    {#if showKanban}
+      <KanbanBoard body={$bodyText} onChange={handleKanbanChange} />
+    {:else if showMarkdownPreview}
       <!-- Event delegation for [[wiki]] anchors inside {@html} preview -->
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <!-- svelte-ignore a11y_no_static_element_interactions -->

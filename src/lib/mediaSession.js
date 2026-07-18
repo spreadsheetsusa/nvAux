@@ -1,7 +1,7 @@
 import { get, writable } from 'svelte/store';
 import { v4 as uuidv4 } from 'uuid';
 
-import { extractMediaLinks } from '../utils/extractMediaLinks';
+import { extractMediaLinks, hasQueueableMedia } from '../utils/extractMediaLinks';
 
 /**
  * @typedef {{
@@ -9,6 +9,7 @@ import { extractMediaLinks } from '../utils/extractMediaLinks';
  *   url: string,
  *   noteGuid: string,
  *   noteName: string,
+ *   provider: 'soundcloud' | 'image' | 'video',
  *   label?: string,
  *   played: boolean
  * }} MediaTrack
@@ -25,6 +26,8 @@ export const mediaTrackIndex = writable(0);
  * AudioPlayer watches this token.
  */
 export const mediaPlayRequest = writable(0);
+
+export { hasQueueableMedia };
 
 /**
  * Cheap presence check for toolbar visibility (avoids full URL extraction on each keystroke).
@@ -46,13 +49,27 @@ export function soundcloudUrlsFrom(text) {
 }
 
 /**
+ * Infer provider for tracks that may predate the provider field.
+ * @param {Pick<MediaTrack, 'url' | 'provider'> | null | undefined} track
+ * @returns {'soundcloud' | 'image' | 'video'}
+ */
+export function mediaTrackProvider(track) {
+  if (track?.provider) return track.provider;
+  const url = track?.url || '';
+  if (/soundcloud\.com|snd\.sc/i.test(url)) return 'soundcloud';
+  if (/\.(?:mp4|webm|ogg|mov)(?:\?|$)/i.test(url)) return 'video';
+  if (/\.(?:png|jpe?g|gif|webp|avif|svg)(?:\?|$)/i.test(url)) return 'image';
+  return 'soundcloud';
+}
+
+/**
  * Build session tracks from a note + body (deduped by URL within this batch).
  * @param {{ guid?: string, name?: string } | null | undefined} note
  * @param {string | null | undefined} body
  * @returns {MediaTrack[]}
  */
 export function buildTracksFromNote(note, body) {
-  const links = extractMediaLinks(body).filter((l) => l.provider === 'soundcloud');
+  const links = extractMediaLinks(body);
   const noteGuid = note?.guid ?? '';
   const noteName = note?.name ?? 'Untitled';
   return links.map((link) => {
@@ -62,6 +79,7 @@ export function buildTracksFromNote(note, body) {
       url: link.url,
       noteGuid,
       noteName,
+      provider: link.provider,
       played: false,
     };
     if (link.label) track.label = link.label;

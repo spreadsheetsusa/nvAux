@@ -1,5 +1,7 @@
+import { clamp, clampFrameRect, FRAME_EDGE_MARGIN } from './clampFrame';
+
 const MOVE_THRESHOLD = 2;
-const EDGE_MARGIN = 48;
+const EDGE_MARGIN = FRAME_EDGE_MARGIN;
 const MIN_WIDTH = 360;
 const MIN_HEIGHT = 300;
 const CORNERS = ['nw', 'ne', 'sw', 'se'];
@@ -10,11 +12,22 @@ const CORNERS = ['nw', 'ne', 'sw', 'se'];
  * corners stay put like a desktop window / Photoshop.
  *
  * @param {HTMLElement} node
- * @param {{ enabled?: boolean, moveEnabled?: boolean, resizeEnabled?: boolean, threshold?: number }} params
+ * @param {{
+ *   enabled?: boolean,
+ *   moveEnabled?: boolean,
+ *   resizeEnabled?: boolean,
+ *   threshold?: number,
+ *   initialRect?: { left: number, top: number, width: number, height: number } | null,
+ *   onFrame?: (rect: { left: number, top: number, width: number, height: number }) => void,
+ * }} params
  */
 export function windowFrame(node, params = {}) {
   let enabled = !!(params.enabled ?? (params.moveEnabled || params.resizeEnabled));
   let threshold = params.threshold ?? MOVE_THRESHOLD;
+  /** @type {((rect: { left: number, top: number, width: number, height: number }) => void) | undefined} */
+  let onFrame = params.onFrame;
+  /** @type {{ left: number, top: number, width: number, height: number } | null} */
+  let initialRect = params.initialRect ?? null;
 
   /** @type {number | null} */
   let left = null;
@@ -92,6 +105,16 @@ export function windowFrame(node, params = {}) {
     clearFrameStyles();
   }
 
+  function emitFrame() {
+    if (left == null || top == null || width == null || height == null) return;
+    onFrame?.({
+      left: Math.round(left),
+      top: Math.round(top),
+      width: Math.round(width),
+      height: Math.round(height),
+    });
+  }
+
   /** Default Demo-sized floating card, centered (matches `main.windowed` CSS). */
   function computeDefaultWindowedRect() {
     const sidebarOpen = node.classList.contains('sidebar-open');
@@ -109,6 +132,22 @@ export function windowFrame(node, params = {}) {
       width: targetW,
       height: targetH,
     };
+  }
+
+  function resolveTargetRect() {
+    if (
+      initialRect &&
+      typeof initialRect.left === 'number' &&
+      typeof initialRect.top === 'number' &&
+      typeof initialRect.width === 'number' &&
+      typeof initialRect.height === 'number'
+    ) {
+      return clampFrameRect(initialRect, {
+        minWidth: MIN_WIDTH,
+        minHeight: MIN_HEIGHT,
+      });
+    }
+    return computeDefaultWindowedRect();
   }
 
   function setFrame(next, { transition = true } = {}) {
@@ -141,11 +180,11 @@ export function windowFrame(node, params = {}) {
 
   /**
    * Enter App Windowed: tween from the current box (usually fullscreen)
-   * down to the default Demo-sized card so resize affordance is obvious.
+   * down to the restored or default Demo-sized card.
    */
   function enterWindowedAnimated() {
     const from = node.getBoundingClientRect();
-    const to = computeDefaultWindowedRect();
+    const to = resolveTargetRect();
 
     setFrame(
       {
@@ -157,11 +196,15 @@ export function windowFrame(node, params = {}) {
       { transition: false }
     );
 
-    // Double rAF: paint the fullscreen pin, then tween to Demo size.
+    // Double rAF: paint the fullscreen pin, then tween to target size.
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         if (!enabled) return;
         setFrame(to, { transition: true });
+        // Persist after settle so restore matches what the user sees.
+        window.setTimeout(() => {
+          if (enabled) emitFrame();
+        }, 220);
       });
     });
   }
@@ -182,10 +225,6 @@ export function windowFrame(node, params = {}) {
 
   function ensurePinned() {
     if (!pinned) pinFromLayout();
-  }
-
-  function clamp(n, lo, hi) {
-    return Math.min(hi, Math.max(lo, n));
   }
 
   function isExcluded(target) {
@@ -227,6 +266,8 @@ export function windowFrame(node, params = {}) {
     if (moving || resizing) {
       suppressClick = true;
       clearInteractionChrome();
+      applyFrame();
+      emitFrame();
     }
     pendingMove = false;
     moving = false;
@@ -399,13 +440,37 @@ export function windowFrame(node, params = {}) {
     resizeCorner = null;
     pointerId = null;
     clearInteractionChrome();
+    applyFrame();
+    emitFrame();
+  }
+
+  function onViewportResize() {
+    if (!enabled || !pinned || left == null || top == null || width == null || height == null) {
+      return;
+    }
+    if (moving || resizing || pendingMove) return;
+    const next = clampFrameRect(
+      { left, top, width, height },
+      { minWidth: MIN_WIDTH, minHeight: MIN_HEIGHT }
+    );
+    if (
+      next.left === left &&
+      next.top === top &&
+      next.width === width &&
+      next.height === height
+    ) {
+      return;
+    }
+    setFrame(next, { transition: false });
+    emitFrame();
   }
 
   syncCorners();
   if (enabled) {
-    // Fresh load already in Windowed: land on Demo-sized card (no fullscreen to leave).
-    setFrame(computeDefaultWindowedRect(), { transition: false });
+    // Fresh load already in Windowed: restore persisted frame or default card.
+    setFrame(resolveTargetRect(), { transition: false });
     requestAnimationFrame(() => node.style.removeProperty('transition'));
+    emitFrame();
   }
 
   node.addEventListener('pointerdown', onPointerDown);
@@ -414,6 +479,7 @@ export function windowFrame(node, params = {}) {
   node.addEventListener('pointercancel', onPointerUp);
   node.addEventListener('lostpointercapture', onLostCapture);
   node.addEventListener('click', onClickCapture, true);
+  window.addEventListener('resize', onViewportResize);
 
   return {
     update(newParams = {}) {
@@ -421,6 +487,10 @@ export function windowFrame(node, params = {}) {
         newParams.enabled ?? (newParams.moveEnabled || newParams.resizeEnabled)
       );
       threshold = newParams.threshold ?? MOVE_THRESHOLD;
+      onFrame = newParams.onFrame;
+      if (newParams.initialRect !== undefined) {
+        initialRect = newParams.initialRect ?? null;
+      }
 
       if (enabled && !nextEnabled) {
         endInteraction();
@@ -440,6 +510,7 @@ export function windowFrame(node, params = {}) {
       endInteraction();
       clearInteractionChrome();
       resetFrame();
+      window.removeEventListener('resize', onViewportResize);
       node.removeEventListener('pointerdown', onPointerDown);
       node.removeEventListener('pointermove', onPointerMove);
       node.removeEventListener('pointerup', onPointerUp);

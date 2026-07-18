@@ -9,6 +9,7 @@
   import AudioPlayer from './lib/AudioPlayer.svelte';
   import Sidebar from './lib/Sidebar.svelte';
   import NotePopupWindow from './lib/NotePopupWindow.svelte';
+  import StickyNote from './lib/StickyNote.svelte';
   import DemoMarketing from './lib/components/marketing/DemoMarketing.svelte';
   import DemoAccentPresets from './lib/components/marketing/DemoAccentPresets.svelte';
 
@@ -25,6 +26,10 @@
     mainWindowZIndex,
     raiseMainWindow,
     isMobile,
+    appWindowFrame,
+    persistAppWindowFrame,
+    syncStickyNotes,
+    clampPersistedFramesToViewport,
   } from './lib/store';
   import { windowFrame } from './utils/windowFrame';
 
@@ -47,20 +52,37 @@
     LIST_CHROME_BASE_PX + ($showStatusBar ? STATUS_BAR_CHROME_PX : 0)
   );
 
-  // Popups are Windowed-only — close all when leaving App Windowed.
+  // Popups / stickies are Windowed-only — close all when leaving; auto-surface stickies on enter.
   $effect(() => {
-    if (!isAppWindowed) closeAllNotePopups();
+    if (!isAppWindowed) {
+      closeAllNotePopups();
+      return;
+    }
+    void syncStickyNotes();
   });
+
+  function handleAppWindowFrame(rect) {
+    persistAppWindowFrame(rect);
+  }
+
+  function handleViewportResize() {
+    clampPersistedFramesToViewport();
+  }
 
   function getNoteListMax() {
     if (!mainContent) return 600;
     const reserved = listChromePx + NOTE_DETAIL_MIN_PX + $mediaPlayerHeight;
+    // Keep max ≥ open min so a collapsed list can always be revealed.
     return Math.max(NOTE_LIST_MIN_PX, mainContent.clientHeight - reserved);
   }
 
   function clampNoteListHeight() {
     const max = getNoteListMax();
-    noteListHeight.update((h) => (h > max ? max : h));
+    noteListHeight.update((h) => {
+      if (h === 0) return 0;
+      if (h > 0 && h < NOTE_LIST_MIN_PX) return 0;
+      return h > max ? max : h;
+    });
   }
 
   // Keep NoteDetail on-screen when the app window (or media chrome) shrinks.
@@ -142,7 +164,12 @@
 
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <main
-      use:windowFrame={{ enabled: isAppWindowed, threshold: 2 }}
+      use:windowFrame={{
+        enabled: isAppWindowed,
+        threshold: 2,
+        initialRect: $appWindowFrame,
+        onFrame: handleAppWindowFrame,
+      }}
       class="{isAppFullscreen ? 'fullscreen' : 'windowed'} relative overflow-hidden flex transition-all"
       class:demo-window={isDemo}
       class:sidebar-open={layoutSidebarOpen}
@@ -165,7 +192,8 @@
         <ResizeHandle
           orientation="vertical"
           bind:value={$noteListHeight}
-          min={NOTE_LIST_MIN_PX}
+          min={0}
+          collapseBelow={NOTE_LIST_MIN_PX}
           getMax={getNoteListMax}
           ariaLabel="Resize note list"
         />
@@ -183,18 +211,31 @@
 
   {#if isAppWindowed}
     {#each $notePopups as popup (popup.id)}
-      <NotePopupWindow
-        id={popup.id}
-        guid={popup.guid}
-        left={popup.left}
-        top={popup.top}
-        width={popup.width}
-        height={popup.height}
-        zIndex={popup.zIndex}
-      />
+      {#if popup.kind === 'sticky'}
+        <StickyNote
+          id={popup.id}
+          guid={popup.guid}
+          left={popup.left}
+          top={popup.top}
+          color={popup.color ?? 'yellow'}
+          zIndex={popup.zIndex}
+        />
+      {:else}
+        <NotePopupWindow
+          id={popup.id}
+          guid={popup.guid}
+          left={popup.left}
+          top={popup.top}
+          width={popup.width}
+          height={popup.height}
+          zIndex={popup.zIndex}
+        />
+      {/if}
     {/each}
   {/if}
 </div>
+
+<svelte:window onresize={handleViewportResize} />
 
 <style>
   h1 {

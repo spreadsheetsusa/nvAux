@@ -29,6 +29,7 @@
     raiseNotePopup,
     updateNotePopupRect,
     openNoteByName,
+    syncMarkdownPreviewForNoteType,
   } from './store';
   import { popupFrame } from '../utils/popupFrame';
   import { debounce } from '../utils/debounce';
@@ -38,6 +39,8 @@
   } from '../utils/wikiLinks';
   import Settings from './Settings.svelte';
   import NoteToolbar from './NoteToolbar.svelte';
+  import { resolveNoteType } from './noteTypes/resolveNoteType';
+  import KanbanBoard from './noteTypes/kanban/KanbanBoard.svelte';
 
   hljs.registerLanguage('bash', bash);
   hljs.registerLanguage('c', c);
@@ -98,10 +101,19 @@
 
   let isSettings = $derived(guid === SETTINGS_GUID);
   let showPreview = $derived(!isSettings && !missing && $markdownPreview);
+  let noteType = $derived(resolveNoteType(noteDoc ?? { guid }, localBody));
+  let showMarkdownPreview = $derived(showPreview && noteType === 'markdown');
+  let showKanban = $derived(showPreview && noteType === 'kanban');
+
+  $effect(() => {
+    if (isSettings || missing) return;
+    syncMarkdownPreviewForNoteType(noteType);
+  });
+
   let previewHtml = $state('');
 
   $effect(() => {
-    if (!showPreview) {
+    if (!showMarkdownPreview) {
       previewHtml = '';
       return;
     }
@@ -111,6 +123,11 @@
     }, 150);
     return () => window.clearTimeout(timeoutId);
   });
+
+  function handleKanbanChange(nextBody) {
+    localBody = nextBody;
+    handleDebounceSave();
+  }
 
   let editorId = $derived(`body-editor-popup-${guid}`);
 
@@ -211,7 +228,9 @@
       </div>
     {:else}
       <NoteToolbar note={noteDoc} body={localBody} />
-      {#if showPreview}
+      {#if showKanban}
+        <KanbanBoard body={localBody} onChange={handleKanbanChange} />
+      {:else if showMarkdownPreview}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div

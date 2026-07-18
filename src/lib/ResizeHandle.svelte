@@ -10,6 +10,11 @@
     getMax = null,
     /** When true, pointer delta is inverted (e.g. drag up to grow a bottom panel). */
     invert = false,
+    /**
+     * When set with min=0: drag below this snaps to 0; expand from 0 snaps open
+     * once past ~half this threshold.
+     */
+    collapseBelow = null,
   } = $props();
 
   let dragging = $state(false);
@@ -17,8 +22,28 @@
   let startValue = $state(0);
   let activeMax = $state(600);
 
+  let canCollapse = $derived(
+    typeof collapseBelow === 'number' && collapseBelow > 0 && min === 0
+  );
+  let isCollapsed = $derived(canCollapse && value === 0);
+
   function clamp(n, lo, hi) {
     return Math.min(hi, Math.max(lo, n));
+  }
+
+  function applySnap(continuous) {
+    if (!canCollapse) return continuous;
+
+    const floor = collapseBelow;
+    const expandThreshold = Math.round(floor / 2);
+
+    if (startValue > 0) {
+      return continuous < floor ? 0 : continuous;
+    }
+
+    // Expanding from collapsed: stay shut until past hysteresis, then open ≥ floor.
+    if (continuous < expandThreshold) return 0;
+    return Math.max(floor, continuous);
   }
 
   function clearDrag() {
@@ -45,7 +70,8 @@
     event.preventDefault();
     const pos = orientation === 'vertical' ? event.clientY : event.clientX;
     const delta = (pos - startPos) * (invert ? -1 : 1);
-    value = Math.round(clamp(startValue + delta, min, activeMax));
+    const continuous = Math.round(clamp(startValue + delta, min, activeMax));
+    value = applySnap(continuous);
   }
 
   function onPointerUp(event) {
@@ -64,6 +90,7 @@
   class:vertical={orientation === 'vertical'}
   class:horizontal={orientation === 'horizontal'}
   class:is-dragging={dragging}
+  class:is-collapsed={isCollapsed}
   class:row-resize={orientation === 'vertical'}
   class:col-resize={orientation === 'horizontal'}
   role="separator"
@@ -133,7 +160,17 @@
   }
 
   .resize-handle.vertical:hover::after,
-  .resize-handle.vertical.is-dragging::after {
+  .resize-handle.vertical.is-dragging::after,
+  .resize-handle.vertical.is-collapsed::after {
     background-color: var(--app-accent, #ed0178);
+  }
+
+  .resize-handle.vertical.is-collapsed::after {
+    opacity: 0.55;
+  }
+
+  .resize-handle.vertical.is-collapsed:hover::after,
+  .resize-handle.vertical.is-collapsed.is-dragging::after {
+    opacity: 1;
   }
 </style>

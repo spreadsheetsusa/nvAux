@@ -1,5 +1,7 @@
+import { clamp, FRAME_EDGE_MARGIN } from './clampFrame';
+
 const MOVE_THRESHOLD = 2;
-const EDGE_MARGIN = 48;
+const EDGE_MARGIN = FRAME_EDGE_MARGIN;
 const MIN_WIDTH = 280;
 const MIN_HEIGHT = 200;
 const CORNERS = ['nw', 'ne', 'sw', 'se'];
@@ -17,6 +19,7 @@ const CORNERS = ['nw', 'ne', 'sw', 'se'];
  *   width?: number,
  *   height?: number,
  *   threshold?: number,
+ *   resizeEnabled?: boolean,
  *   onFrame?: (rect: { left: number, top: number, width: number, height: number }) => void,
  * }} params
  */
@@ -26,6 +29,7 @@ export function popupFrame(node, params = {}) {
   let width = params.width ?? 420;
   let height = params.height ?? 320;
   let threshold = params.threshold ?? MOVE_THRESHOLD;
+  let resizeEnabled = params.resizeEnabled !== false;
   /** @type {((rect: { left: number, top: number, width: number, height: number }) => void) | undefined} */
   let onFrame = params.onFrame;
 
@@ -55,6 +59,12 @@ export function popupFrame(node, params = {}) {
     return el;
   });
 
+  function syncCornerVisibility() {
+    for (const el of cornerEls) {
+      el.style.display = resizeEnabled ? '' : 'none';
+    }
+  }
+
   function isInteracting() {
     return pendingMove || moving || resizing;
   }
@@ -77,10 +87,6 @@ export function popupFrame(node, params = {}) {
       width: Math.round(width),
       height: Math.round(height),
     });
-  }
-
-  function clamp(n, lo, hi) {
-    return Math.min(hi, Math.max(lo, n));
   }
 
   function clearInteractionChrome() {
@@ -147,6 +153,7 @@ export function popupFrame(node, params = {}) {
   }
 
   function onCornerPointerDown(event) {
+    if (!resizeEnabled) return;
     if (event.button != null && event.button !== 0) return;
     const corner = cornerFromTarget(event.target);
     if (!corner) return;
@@ -317,6 +324,7 @@ export function popupFrame(node, params = {}) {
     emitFrame();
   }
 
+  syncCornerVisibility();
   applyFrame();
 
   node.addEventListener('pointerdown', onPointerDown);
@@ -330,6 +338,8 @@ export function popupFrame(node, params = {}) {
     update(newParams = {}) {
       threshold = newParams.threshold ?? MOVE_THRESHOLD;
       onFrame = newParams.onFrame;
+      resizeEnabled = newParams.resizeEnabled !== false;
+      syncCornerVisibility();
       // Never let store/props overwrite geometry mid-drag/resize (or during pending move).
       if (isInteracting()) return;
       if (typeof newParams.left === 'number') left = newParams.left;

@@ -3,21 +3,9 @@
   width="16"
   height="16"
   viewBox="0 0 24 24"
-  fill="none"
-  stroke="currentColor"
-  stroke-width="2"
-  stroke-linecap="round"
-  stroke-linejoin="round"
-  class="feather feather-share-2"
-  aria-hidden="true"
-  ><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle
-    cx="18"
-    cy="19"
-    r="3"
-  /><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line
-    x1="15.41"
-    y1="6.51"
-    x2="8.59"
-    y2="10.49"
+  fill="currentColor"
+  class="icon icon-tabler icons-tabler-filled icon-tabler-chart-dots-3"
+  ><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path
+    d="M18 2a4 4 0 1 1 -3.843 5.114l-6.295 .786a3 3 0 0 1 -.094 .257l6.446 4.431a3 3 0 1 1 -.695 4.099l-3.527 1.058q .008 .127 .008 .255a4 4 0 1 1 -8 0l.005 -.2a4 4 0 0 1 7.366 -1.954l3.64 -1.094l.01 -.102q .023 -.204 .074 -.4l-6.688 -4.6a3 3 0 0 1 -4.407 -2.65l.005 -.176a3 3 0 0 1 5.784 -.931l6.312 -.79a4 4 0 0 1 3.899 -3.103"
   /></svg
 >

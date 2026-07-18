@@ -84,31 +84,31 @@ html, body { margin: 0; padding: 0; font-family: Verdana, Geneva, Tahoma, sans-s
 @property --grad-1 {
 	syntax: '<color>';
 	inherits: true;
-	initial-value: #ea8060;
+	initial-value: #d392ca;
 }
 @property --grad-2 {
 	syntax: '<color>';
 	inherits: true;
-	initial-value: #e4578d;
+	initial-value: #d175a4;
 }
 @property --grad-3 {
 	syntax: '<color>';
 	inherits: true;
-	initial-value: #a1d0e1;
+	initial-value: #bbbad4;
 }
 @property --grad-4 {
 	syntax: '<color>';
 	inherits: true;
-	initial-value: #94a3b8;
+	initial-value: #adafc2;
 }
 
 body {
 	background: linear-gradient(
 		-45deg,
-		var(--grad-1, #ea8060),
-		var(--grad-2, #e4578d),
-		var(--grad-3, #a1d0e1),
-		var(--grad-4, #94a3b8)
+		var(--grad-1, #d392ca),
+		var(--grad-2, #d175a4),
+		var(--grad-3, #bbbad4),
+		var(--grad-4, #adafc2)
 	);
 	background-size: 400% 400%;
 	animation: gradient 40s ease-in-out infinite;
@@ -133,11 +133,11 @@ body.is-panel-resizing .sidebar {
 :root {
 	--text-color: black;
 	--app-accent: #ed0178;
-	/* Accent-seeded page gradient (JS updates these; defaults match coral/pink/sky/slate). */
-	--grad-1: #ea8060;
-	--grad-2: #e4578d;
-	--grad-3: #a1d0e1;
-	--grad-4: #94a3b8;
+	/* Accent-seeded page gradient (JS updates these; defaults match soft rose/pink/lilac/slate). */
+	--grad-1: #d392ca;
+	--grad-2: #d175a4;
+	--grad-3: #bbbad4;
+	--grad-4: #adafc2;
 	--app-background: #eaeaea;
 	--app-omni-background: #d8d8d8;
 	--app-statusbar-background: #d1d1d1;
@@ -148,6 +148,10 @@ body.is-panel-resizing .sidebar {
 	--app-notelist-even-background: #e3e3e3;
 	--scrollbar-thumb: rgba(60, 60, 60, 0.28);
 	--scrollbar-thumb-hover: rgba(60, 60, 60, 0.45);
+	/* Windowed sticky post-it presets */
+	--sticky-yellow: #fef08a;
+	--sticky-pink: #fbcfe8;
+	--sticky-blue: #bae6fd;
 	transition:
 		--grad-1 0.85s ease,
 		--grad-2 0.85s ease,
@@ -164,10 +168,10 @@ body.is-panel-resizing .sidebar {
 @media (prefers-color-scheme: dark) {
 	:root {
 		--text-color: white;
-		--grad-1: #714436;
-		--grad-2: #72354d;
-		--grad-3: #334169;
-		--grad-4: #3a4558;
+		--grad-1: #6c2d64;
+		--grad-2: #682748;
+		--grad-3: #333153;
+		--grad-4: #3d3e52;
 		--app-background: #181a1c;
 		--app-omni-background: #181a1c;
 		--app-statusbar-background: #151719;

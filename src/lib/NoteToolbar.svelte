@@ -5,6 +5,8 @@
     selectedNote,
     bodyText,
     markdownPreview,
+    setNoteSticky,
+    toggleMarkdownPreviewForNoteType,
   } from './store';
   import { isEmptyObject } from '../utils/isEmptyObject';
   import {
@@ -12,9 +14,12 @@
     mediaAddNext,
     mediaAddLast,
     mediaPlayNow,
-    hasSoundCloudLinks,
+    hasQueueableMedia,
   } from './mediaSession';
+  import { isNoteSticky } from './noteTypes/parseNoteMeta';
+  import { resolveNoteType } from './noteTypes/resolveNoteType';
   import IconCalendarTime from './IconCalendarTime.svelte';
+  import IconSticky from './IconSticky.svelte';
 
   const createdAtSlide = { axis: 'x', duration: 180 };
 
@@ -35,7 +40,18 @@
       activeNote.guid !== SETTINGS_GUID
   );
 
-  let hasSoundCloud = $derived(canPreview && hasSoundCloudLinks(activeBody));
+  let noteType = $derived(
+    canPreview ? resolveNoteType(activeNote, activeBody) : 'empty'
+  );
+  let canSticky = $derived(canPreview && noteType === 'markdown');
+  let stickyOn = $derived(canSticky && isNoteSticky(activeBody));
+
+  let hasMedia = $derived(canPreview && hasQueueableMedia(activeBody));
+
+  async function toggleSticky() {
+    if (!activeNote || !canSticky) return;
+    await setNoteSticky(activeNote, !stickyOn);
+  }
 
   let editingGuid = $state(null);
   let draftDate = $state('');
@@ -44,7 +60,7 @@
   );
 
   function togglePreview() {
-    markdownPreview.update((v) => !v);
+    toggleMarkdownPreviewForNoteType(noteType);
   }
 
   function queueTracks(mode) {
@@ -116,7 +132,7 @@
 
 {#if canPreview}
   <div class="note-toolbar flex items-center justify-between flex-shrink-0">
-    {#if hasSoundCloud}
+    {#if hasMedia}
       <div class="media-actions flex items-center flex-shrink-0">
         <button type="button" class="toolbar-btn accent" onclick={() => queueTracks('now')}>
           <svg
@@ -195,6 +211,20 @@
           </button>
         {/if}
       {/key}
+      {#if canSticky}
+        <button
+          type="button"
+          class="toolbar-btn flex-shrink-0 icon-btn"
+          class:active={stickyOn}
+          aria-label={stickyOn ? 'Unpin sticky' : 'Pin as sticky'}
+          title={stickyOn
+            ? 'Unpin sticky (use normal popup in Windowed)'
+            : 'Pin as sticky note in Windowed mode'}
+          onclick={toggleSticky}
+        >
+          <IconSticky class="sticky-icon" />
+        </button>
+      {/if}
       <button
         type="button"
         class="toolbar-btn flex-shrink-0"
@@ -304,7 +334,8 @@
     background: color-mix(in srgb, var(--app-accent) 88%, #fff);
   }
 
-  .toolbar-btn :global(.calendar-time-icon) {
+  .toolbar-btn :global(.calendar-time-icon),
+  .toolbar-btn :global(.sticky-icon) {
     width: 12px;
     height: 12px;
     flex-shrink: 0;

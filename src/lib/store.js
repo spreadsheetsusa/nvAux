@@ -6,6 +6,15 @@ import { getRxStorageDexie } from 'rxdb/plugins/storage-dexie';
 
 import { schema } from './schema';
 import { applyAccentGradient } from '../utils/accentGradient';
+import { defaultKanbanBody } from './noteTypes/kanban/kanbanModel';
+import {
+  applyStickyMeta,
+  getStickyColor,
+  isNoteSticky,
+  normalizeStickyColor,
+} from './noteTypes/parseNoteMeta';
+import { isRichNoteType, resolveNoteType } from './noteTypes/resolveNoteType';
+import { clampFramePosition, clampFrameRect } from '../utils/clampFrame';
 
 /**
  * State that persists to localStorage =========================================
@@ -13,6 +22,10 @@ import { applyAccentGradient } from '../utils/accentGradient';
 
 const storedNoteListHeight = localStorage.getItem('noteListHeight') || 220;
 const storedSidebarWidth = localStorage.getItem('sidebarWidth') || 443;
+const storedMediaViewerHeight = (() => {
+  const raw = Number(localStorage.getItem('mediaViewerHeight'));
+  return Number.isFinite(raw) ? Math.min(480, Math.max(120, raw)) : 220;
+})();
 
 /** @param {string} key @param {boolean} fallback */
 function readStoredBool(key, fallback) {
@@ -56,6 +69,9 @@ const mobileMq =
 const storedShowClock = JSON.parse(localStorage.getItem('showClock')) || "true";
 const storedShowStatusBar = readStoredBool('showStatusBar', false);
 const storedSidebarOpen = readStoredBool('sidebarOpen', false);
+/** Preview vs Edit prefs by kind (plain markdown vs rich body types). Old `markdownPreview` key ignored. */
+const storedMarkdownPreviewPlain = readStoredBool('markdownPreviewPlain', false);
+const storedMarkdownPreviewRich = readStoredBool('markdownPreviewRich', true);
 const storedBirthDate = localStorage.getItem('birthDate') || '1982-05-24';
 const storedExpectedLongevity = localStorage.getItem('expectedLongevity') || '80';
 const LIFE_CALENDAR_STATS = [
@@ -94,6 +110,63 @@ function normalizeAccentColor(raw) {
 
 const storedAccentColor = normalizeAccentColor(localStorage.getItem('accentColor'));
 
+/** Fixed sticky post-it size (App Windowed). */
+export const STICKY_NOTE_W = 240;
+export const STICKY_NOTE_H = 260;
+
+/** @param {unknown} raw */
+function parseAppWindowFrame(raw) {
+  if (!raw) return null;
+  try {
+    const v = JSON.parse(raw);
+    if (
+      !v ||
+      typeof v.left !== 'number' ||
+      typeof v.top !== 'number' ||
+      typeof v.width !== 'number' ||
+      typeof v.height !== 'number'
+    ) {
+      return null;
+    }
+    return clampFrameRect(v, { minWidth: 360, minHeight: 300 });
+  } catch {
+    return null;
+  }
+}
+
+const storedAppWindowFrame = parseAppWindowFrame(localStorage.getItem('appWindowFrame'));
+
+/** @param {unknown} raw */
+function parseStickyNoteFrames(raw) {
+  /** @type {Record<string, { left: number, top: number }>} */
+  const out = {};
+  if (!raw) return out;
+  try {
+    const v = JSON.parse(raw);
+    if (!v || typeof v !== 'object') return out;
+    for (const [guid, pos] of Object.entries(v)) {
+      if (
+        !pos ||
+        typeof pos.left !== 'number' ||
+        typeof pos.top !== 'number'
+      ) {
+        continue;
+      }
+      out[guid] = clampFramePosition(
+        { left: pos.left, top: pos.top },
+        { width: STICKY_NOTE_W, height: STICKY_NOTE_H }
+      );
+    }
+  } catch {
+    /* ignore */
+  }
+  return out;
+}
+
+const storedStickyNoteFrames = parseStickyNoteFrames(
+  localStorage.getItem('stickyNoteFrames')
+);
+
 /**
  * RxDB ************************************************************************
  */
@@ -131,6 +204,7 @@ const _create = async () => {
 
   const WELCOME_GUID = '11111111-1111-1111-1111-111111111111';
   const TECHNO_LEAGUE_GUID = '22222222-2222-2222-2222-222222222222';
+  const KANBAN_DEMO_GUID = '33333333-3333-3333-3333-333333333333';
 
   const welcomeNote = await db.notes.findOne(WELCOME_GUID).exec();
   if (!welcomeNote) {
@@ -144,6 +218,7 @@ This is a web-based note-taking app inspired by nvALT where searching and creati
 * All your notes are stored within your browser, locally (and unencrypted for now).
 * Do no trust your data here yet. Not production-ready. Thar be dragons.
 * 'Add to Home Screen' on iOS Safari for a native app-like experience.
+* Notes can be typed: open **📋 Sample Kanban** for a board (Preview = board, Edit = source). Image/video file links can be queued into the media player like SoundCloud.
 
 If you are interested in the development of nvAux the project is open-source and available on GitHub at https://github.com/matterofabstract/nvaux
 
@@ -186,6 +261,17 @@ Don't forget to follow the project on 𝕏 at @nvAuxApp and let us know what you
 
 The current implementation is basic. There are future plans to support the full soundcloud api with ability to download and store media automatically.
 `,
+      createdAt: new Date().getTime(),
+      updatedAt: new Date().getTime(),
+    });
+  }
+
+  const kanbanDemoNote = await db.notes.findOne(KANBAN_DEMO_GUID).exec();
+  if (!kanbanDemoNote) {
+    await db.notes.insert({
+      guid: KANBAN_DEMO_GUID,
+      name: '📋 Sample Kanban',
+      body: defaultKanbanBody(),
       createdAt: new Date().getTime(),
       updatedAt: new Date().getTime(),
     });
@@ -240,7 +326,44 @@ export const graphViewHeight = writable(Number(storedGraphViewHeight));
 export const graphViewZoom = writable(storedGraphViewZoom);
 export const selectedNote = writable({});
 export const bodyText = writable('');
-export const markdownPreview = writable(false);
+/** Active Preview/Edit UI flag; synced from per-kind prefs via {@link syncMarkdownPreviewForNoteType}. */
+export const markdownPreview = writable(storedMarkdownPreviewPlain);
+const markdownPreviewPlain = writable(storedMarkdownPreviewPlain);
+const markdownPreviewRich = writable(storedMarkdownPreviewRich);
+
+/**
+ * Load the active preview toggle from the pref for this note kind.
+ * No-op for empty/settings.
+ * @param {import('./noteTypes/resolveNoteType').NoteType | string | null | undefined} type
+ */
+export function syncMarkdownPreviewForNoteType(type) {
+  if (type === 'markdown') {
+    markdownPreview.set(get(markdownPreviewPlain));
+    return;
+  }
+  if (isRichNoteType(type)) {
+    markdownPreview.set(get(markdownPreviewRich));
+  }
+}
+
+/**
+ * Flip Preview/Edit for the active note kind and persist that kind's pref.
+ * @param {import('./noteTypes/resolveNoteType').NoteType | string | null | undefined} type
+ */
+export function toggleMarkdownPreviewForNoteType(type) {
+  if (type === 'markdown') {
+    const next = !get(markdownPreviewPlain);
+    markdownPreviewPlain.set(next);
+    markdownPreview.set(next);
+    return;
+  }
+  if (isRichNoteType(type)) {
+    const next = !get(markdownPreviewRich);
+    markdownPreviewRich.set(next);
+    markdownPreview.set(next);
+  }
+}
+
 export const fullScreen = writable(storedFullScreen);
 /** App Mode floating window (vs edge-to-edge fullscreen). Desktop only. */
 export const windowed = writable(storedWindowed);
@@ -291,12 +414,16 @@ if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
 }
 /** Height of the media player bar under the Omnibar (0 when hidden). */
 export const mediaPlayerHeight = writable(0);
+/** Resizable image/video viewer pane above the media player bar. */
+export const mediaViewerHeight = writable(storedMediaViewerHeight);
 
 /**
- * Session-only floating note popups (App Windowed).
+ * Session floating note windows (App Windowed): resizable popups + fixed stickies.
  * @type {import('svelte/store').Writable<Array<{
  *   id: string,
  *   guid: string,
+ *   kind: 'popup' | 'sticky',
+ *   color?: 'yellow' | 'pink' | 'blue',
  *   left: number,
  *   top: number,
  *   width: number,
@@ -305,6 +432,12 @@ export const mediaPlayerHeight = writable(0);
  * }>>}
  */
 export const notePopups = writable([]);
+
+/** Persisted main App Windowed geometry (null = use default). */
+export const appWindowFrame = writable(storedAppWindowFrame);
+
+/** Persisted sticky positions keyed by note guid. */
+export const stickyNoteFrames = writable(storedStickyNoteFrames);
 
 /** Z-order for the main App Windowed card (competes with note popups). */
 export const mainWindowZIndex = writable(10);
@@ -327,23 +460,197 @@ export function raiseMainWindow() {
 }
 
 /**
- * Open a floating note popup for guid (App Windowed). One per guid — reopens raise existing.
+ * @param {{ left: number, top: number, width: number, height: number }} rect
+ */
+export function persistAppWindowFrame(rect) {
+  if (!rect) return;
+  const next = clampFrameRect(rect, { minWidth: 360, minHeight: 300 });
+  appWindowFrame.set(next);
+}
+
+/**
+ * @param {string} guid
+ * @param {{ left: number, top: number }} pos
+ */
+export function persistStickyNoteFrame(guid, pos) {
+  if (!guid || !pos) return;
+  const next = clampFramePosition(pos, {
+    width: STICKY_NOTE_W,
+    height: STICKY_NOTE_H,
+  });
+  stickyNoteFrames.update((map) => ({ ...map, [guid]: next }));
+}
+
+/** Re-clamp persisted frames after viewport changes. */
+export function clampPersistedFramesToViewport() {
+  const frame = get(appWindowFrame);
+  if (frame) {
+    appWindowFrame.set(clampFrameRect(frame, { minWidth: 360, minHeight: 300 }));
+  }
+  stickyNoteFrames.update((map) => {
+    /** @type {Record<string, { left: number, top: number }>} */
+    const next = {};
+    for (const [guid, pos] of Object.entries(map)) {
+      next[guid] = clampFramePosition(pos, {
+        width: STICKY_NOTE_W,
+        height: STICKY_NOTE_H,
+      });
+    }
+    return next;
+  });
+  notePopups.update((list) =>
+    list.map((p) => {
+      if (p.kind === 'sticky') {
+        const pos = clampFramePosition(
+          { left: p.left, top: p.top },
+          { width: STICKY_NOTE_W, height: STICKY_NOTE_H }
+        );
+        return {
+          ...p,
+          left: pos.left,
+          top: pos.top,
+          width: STICKY_NOTE_W,
+          height: STICKY_NOTE_H,
+        };
+      }
+      const rect = clampFrameRect(
+        { left: p.left, top: p.top, width: p.width, height: p.height },
+        { minWidth: 280, minHeight: 200 }
+      );
+      return { ...p, ...rect };
+    })
+  );
+}
+
+/**
+ * Default cascade position for a new sticky.
+ * @param {number} index
+ */
+function defaultStickyPos(index) {
+  const left = Math.max(
+    16,
+    Math.round(window.innerWidth * 0.08) + index * POPUP_CASCADE
+  );
+  const top = Math.max(
+    16,
+    Math.round(window.innerHeight * 0.12) + index * POPUP_CASCADE
+  );
+  return clampFramePosition(
+    { left, top },
+    { width: STICKY_NOTE_W, height: STICKY_NOTE_H }
+  );
+}
+
+/**
+ * Ensure a sticky floater exists for guid (raise if already open).
+ * @param {string} guid
+ * @param {{ color?: string, body?: string }} [opts]
+ */
+export function ensureStickyPopup(guid, opts = {}) {
+  if (!guid) return;
+  const color =
+    normalizeStickyColor(opts.color ?? '') ??
+    (opts.body != null ? getStickyColor(opts.body) : 'yellow');
+  const frames = get(stickyNoteFrames);
+
+  notePopups.update((list) => {
+    const existing = list.find((p) => p.guid === guid);
+    if (existing) {
+      const z = nextWindowZ();
+      return list.map((p) =>
+        p.id === existing.id
+          ? {
+              ...p,
+              kind: 'sticky',
+              color,
+              width: STICKY_NOTE_W,
+              height: STICKY_NOTE_H,
+              zIndex: z,
+            }
+          : p
+      );
+    }
+    const stickyCount = list.filter((p) => p.kind === 'sticky').length;
+    const saved = frames[guid];
+    const pos = saved
+      ? clampFramePosition(saved, {
+          width: STICKY_NOTE_W,
+          height: STICKY_NOTE_H,
+        })
+      : defaultStickyPos(stickyCount);
+    return [
+      ...list,
+      {
+        id: uuidv4(),
+        guid,
+        kind: 'sticky',
+        color,
+        left: pos.left,
+        top: pos.top,
+        width: STICKY_NOTE_W,
+        height: STICKY_NOTE_H,
+        zIndex: nextWindowZ(),
+      },
+    ];
+  });
+}
+
+/**
+ * Open a floating note popup for guid (App Windowed). Sticky notes use sticky chrome.
+ * One per guid — reopens raise existing.
  * @param {string} guid
  */
-export function openNotePopup(guid) {
+export async function openNotePopup(guid) {
   if (!guid) return;
+  const database = await db();
+  const doc = await database.notes.findOne(guid).exec();
+  const body = doc?.body ?? '';
+  const sticky = doc && isNoteSticky(body) && resolveNoteType(doc, body) === 'markdown';
+
+  if (sticky) {
+    ensureStickyPopup(guid, { body, color: getStickyColor(body) });
+    return;
+  }
+
   let raised = false;
   notePopups.update((list) => {
     const existing = list.find((p) => p.guid === guid);
     if (existing) {
       raised = true;
       const z = nextWindowZ();
+      // Sticky → popup when sticky was turned off mid-session.
+      if (existing.kind === 'sticky') {
+        const width = POPUP_DEFAULT_W;
+        const height = POPUP_DEFAULT_H;
+        const left = Math.max(
+          16,
+          Math.round((window.innerWidth - width) / 2)
+        );
+        const top = Math.max(
+          16,
+          Math.round((window.innerHeight - height) / 2)
+        );
+        return list.map((p) =>
+          p.id === existing.id
+            ? {
+                ...p,
+                kind: 'popup',
+                color: undefined,
+                left,
+                top,
+                width,
+                height,
+                zIndex: z,
+              }
+            : p
+        );
+      }
       return list.map((p) =>
         p.id === existing.id ? { ...p, zIndex: z } : p
       );
     }
     const z = nextWindowZ();
-    const index = list.length;
+    const index = list.filter((p) => p.kind === 'popup').length;
     const width = POPUP_DEFAULT_W;
     const height = POPUP_DEFAULT_H;
     const left = Math.max(
@@ -359,6 +666,7 @@ export function openNotePopup(guid) {
       {
         id: uuidv4(),
         guid,
+        kind: 'popup',
         left,
         top,
         width,
@@ -368,6 +676,140 @@ export function openNotePopup(guid) {
     ];
   });
   return raised;
+}
+
+/**
+ * Auto-surface every sticky markdown note in App Windowed.
+ * Session-dismissed stickies stay hidden until the next Windowed enter.
+ */
+export async function syncStickyNotes() {
+  const database = await db();
+  const docs = await database.notes.find().exec();
+  const stickyDocs = docs.filter((doc) => {
+    const body = doc.body ?? '';
+    return isNoteSticky(body) && resolveNoteType(doc, body) === 'markdown';
+  });
+
+  const frames = get(stickyNoteFrames);
+  const want = new Set(stickyDocs.map((d) => d.guid));
+
+  notePopups.update((list) => {
+    // Drop sticky floaters for notes that are no longer sticky.
+    let next = list.filter(
+      (p) => p.kind !== 'sticky' || want.has(p.guid)
+    );
+    let cascade = next.filter((p) => p.kind === 'sticky').length;
+
+    for (const doc of stickyDocs) {
+      const color = getStickyColor(doc.body);
+      const existing = next.find((p) => p.guid === doc.guid);
+      if (existing) {
+        const saved = frames[doc.guid];
+        const pos = saved
+          ? clampFramePosition(saved, {
+              width: STICKY_NOTE_W,
+              height: STICKY_NOTE_H,
+            })
+          : {
+              left: existing.left,
+              top: existing.top,
+            };
+        next = next.map((p) =>
+          p.guid === doc.guid
+            ? {
+                ...p,
+                kind: 'sticky',
+                color,
+                left: pos.left,
+                top: pos.top,
+                width: STICKY_NOTE_W,
+                height: STICKY_NOTE_H,
+              }
+            : p
+        );
+        continue;
+      }
+      const saved = frames[doc.guid];
+      const pos = saved
+        ? clampFramePosition(saved, {
+            width: STICKY_NOTE_W,
+            height: STICKY_NOTE_H,
+          })
+        : defaultStickyPos(cascade++);
+      next = [
+        ...next,
+        {
+          id: uuidv4(),
+          guid: doc.guid,
+          kind: 'sticky',
+          color,
+          left: pos.left,
+          top: pos.top,
+          width: STICKY_NOTE_W,
+          height: STICKY_NOTE_H,
+          zIndex: nextWindowZ(),
+        },
+      ];
+    }
+    return next;
+  });
+}
+
+/**
+ * Toggle sticky frontmatter on a note and sync Windowed floaters.
+ * @param {any} noteDoc RxDB document
+ * @param {boolean} sticky
+ * @param {'yellow' | 'pink' | 'blue'} [color]
+ */
+export async function setNoteSticky(noteDoc, sticky, color) {
+  if (!noteDoc?.guid || noteDoc.guid === SETTINGS_GUID) return;
+  const prevBody = noteDoc.body ?? '';
+  if (resolveNoteType(noteDoc, prevBody) !== 'markdown' && sticky) return;
+
+  const nextBody = applyStickyMeta(prevBody, {
+    sticky: !!sticky,
+    color: color ?? getStickyColor(prevBody),
+  });
+
+  await noteDoc.incrementalModify((data) => {
+    data.body = nextBody;
+    data.updatedAt = Date.now();
+    return data;
+  });
+
+  // Keep main editor in sync when this is the selected note.
+  const selected = get(selectedNote);
+  if (selected?.guid === noteDoc.guid) {
+    bodyText.set(nextBody);
+  }
+
+  const inWindowed = get(fullScreen) && get(windowed) && !get(isMobile);
+  if (sticky) {
+    if (inWindowed) {
+      ensureStickyPopup(noteDoc.guid, {
+        body: nextBody,
+        color: getStickyColor(nextBody),
+      });
+    }
+  } else {
+    notePopups.update((list) =>
+      list.filter((p) => !(p.guid === noteDoc.guid && p.kind === 'sticky'))
+    );
+  }
+}
+
+/**
+ * Update sticky color in frontmatter + open floater.
+ * @param {any} noteDoc
+ * @param {'yellow' | 'pink' | 'blue'} color
+ */
+export async function setStickyColor(noteDoc, color) {
+  if (!noteDoc?.guid) return;
+  const c = normalizeStickyColor(color);
+  if (!c) return;
+  const prevBody = noteDoc.body ?? '';
+  if (!isNoteSticky(prevBody)) return;
+  await setNoteSticky(noteDoc, true, c);
 }
 
 /** @param {string} id */
@@ -400,19 +842,40 @@ export function raiseNotePopup(id) {
  */
 export function updateNotePopupRect(id, rect) {
   if (!id || !rect) return;
-  notePopups.update((list) =>
-    list.map((p) =>
+  notePopups.update((list) => {
+    const target = list.find((p) => p.id === id);
+    if (!target) return list;
+    if (target.kind === 'sticky') {
+      const pos = clampFramePosition(
+        { left: rect.left, top: rect.top },
+        { width: STICKY_NOTE_W, height: STICKY_NOTE_H }
+      );
+      persistStickyNoteFrame(target.guid, pos);
+      return list.map((p) =>
+        p.id === id
+          ? {
+              ...p,
+              left: pos.left,
+              top: pos.top,
+              width: STICKY_NOTE_W,
+              height: STICKY_NOTE_H,
+            }
+          : p
+      );
+    }
+    const next = clampFrameRect(rect, { minWidth: 280, minHeight: 200 });
+    return list.map((p) =>
       p.id === id
         ? {
             ...p,
-            left: rect.left,
-            top: rect.top,
-            width: rect.width,
-            height: rect.height,
+            left: next.left,
+            top: next.top,
+            width: next.width,
+            height: next.height,
           }
         : p
-    )
-  );
+    );
+  });
 }
 
 /**
@@ -488,6 +951,7 @@ omniText.subscribe(v => {
 });
 
 noteListHeight.subscribe(v => localStorage.setItem('noteListHeight', v.toString()));
+mediaViewerHeight.subscribe((v) => localStorage.setItem('mediaViewerHeight', v.toString()));
 sidebarWidth.subscribe(v => localStorage.setItem('sidebarWidth', v.toString()));
 sidebarOpen.subscribe(v => localStorage.setItem('sidebarOpen', JSON.stringify(v)));
 graphViewHeight.subscribe(v => localStorage.setItem('graphViewHeight', v.toString()));
@@ -535,7 +999,17 @@ persistPreference(fullScreen, 'fullScreen', (v) => JSON.stringify(v));
 persistPreference(windowed, 'windowed', (v) => JSON.stringify(v));
 persistPreference(showClock, 'showClock', (v) => String(v));
 persistPreference(showStatusBar, 'showStatusBar', (v) => JSON.stringify(v));
+persistPreference(markdownPreviewPlain, 'markdownPreviewPlain', (v) => JSON.stringify(v));
+persistPreference(markdownPreviewRich, 'markdownPreviewRich', (v) => JSON.stringify(v));
 persistPreference(birthDate, 'birthDate', (v) => v);
 persistPreference(expectedLongevity, 'expectedLongevity', (v) => v);
 persistPreference(lifeCalendarStat, 'lifeCalendarStat', (v) => v);
 persistPreference(accentColor, 'accentColor', (v) => normalizeAccentColor(v));
+
+appWindowFrame.subscribe((v) => {
+  if (v) localStorage.setItem('appWindowFrame', JSON.stringify(v));
+  else localStorage.removeItem('appWindowFrame');
+});
+stickyNoteFrames.subscribe((v) => {
+  localStorage.setItem('stickyNoteFrames', JSON.stringify(v ?? {}));
+});

@@ -231,6 +231,7 @@
 <ul
   id="noteList"
   class="thin-scrollbar flex-shrink-0 border-box"
+  class:is-collapsed={$noteListHeight <= 0}
   onmousedown={() => (isMouseDown = true)}
   onmouseup={() => (isMouseDown = false)}
   style="height: {$noteListHeight}px;"
@@ -329,6 +330,12 @@
     overflow-x: hidden;
     background-color: var(--app-omni-background);
     border-radius: 8px;
+  }
+  ul.is-collapsed {
+    margin: 0;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
   }
   li {
     display: flex;
