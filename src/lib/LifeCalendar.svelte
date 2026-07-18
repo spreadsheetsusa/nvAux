@@ -7,9 +7,11 @@
     birthDate,
     db,
     expectedLongevity,
+    isMobile,
     lifeCalendarStat,
     LIFE_CALENDAR_STAT_MODES,
     selectNoteByGuid,
+    sidebarOpen,
     sidebarWidth,
   } from './store';
 
@@ -547,6 +549,8 @@
   /** @param {string} guid */
   function openWeekNote(guid) {
     selectNoteByGuid(guid);
+    // Mobile drawer: reveal the note in the main pane after selecting.
+    if ($isMobile) sidebarOpen.set(false);
   }
 
   /** @param {number} weekIndex */

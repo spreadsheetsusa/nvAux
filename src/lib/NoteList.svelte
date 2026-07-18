@@ -10,6 +10,7 @@
     noteListHeight,
     fullScreen,
     windowed,
+    isMobile,
     openNotePopup,
     invalidateWikiNoteNames,
   } from './store';
@@ -19,7 +20,7 @@
   const BODY_PREVIEW_LEN = 100;
   const SEARCH_DEBOUNCE_MS = 150;
 
-  let isAppWindowed = $derived($fullScreen && $windowed);
+  let isAppWindowed = $derived($fullScreen && $windowed && !$isMobile);
 
   let db$ = $state(null);
   let isMouseDown = $state(false);

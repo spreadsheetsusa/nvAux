@@ -17,11 +17,12 @@
     windowed,
     showClock,
     invalidateWikiNoteNames,
+    isMobile,
   } from './store';
 
   let omniInput = $state();
   let time = $state(new Date());
-  let isAppFullscreen = $derived($fullScreen && !$windowed);
+  let isAppFullscreen = $derived($fullScreen && (!$windowed || $isMobile));
 
   /** Omnibar: Demo ↔ App Fullscreen. Windowed is Settings-only. */
   function toggleAppFullscreen() {

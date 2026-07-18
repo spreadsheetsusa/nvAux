@@ -1,11 +1,11 @@
 {
   "version": 1,
   "transcriptDirectory": "/Users/bpk/.cursor/projects/Users-bpk-Development-nvAux/agent-transcripts",
-  "updatedAtUtc": "2026-07-18T04:22:13.485Z",
+  "updatedAtUtc": "2026-07-18T14:50:50.477Z",
   "transcripts": {
     "/Users/bpk/.cursor/projects/Users-bpk-Development-nvAux/agent-transcripts/047f7c28-e280-4aa1-b2d8-6fb4ed65de83/047f7c28-e280-4aa1-b2d8-6fb4ed65de83.jsonl": {
-      "mtimeUtc": "2026-07-18T02:59:55.974Z",
-      "mtimeMs": 1784343595974
+      "mtimeUtc": "2026-07-18T04:35:41.126Z",
+      "mtimeMs": 1784349341126
     },
     "/Users/bpk/.cursor/projects/Users-bpk-Development-nvAux/agent-transcripts/047f7c28-e280-4aa1-b2d8-6fb4ed65de83/subagents/40daf114-6c4b-4b0b-b774-e48ccf0a875d.jsonl": {
       "mtimeUtc": "2026-07-18T02:56:29.975Z",
@@ -28,12 +28,16 @@
       "mtimeMs": 1784343661192
     },
     "/Users/bpk/.cursor/projects/Users-bpk-Development-nvAux/agent-transcripts/28937132-eda6-42a7-8a18-01740c76b7e5/28937132-eda6-42a7-8a18-01740c76b7e5.jsonl": {
-      "mtimeUtc": "2026-07-18T04:21:08.236Z",
-      "mtimeMs": 1784348468236
+      "mtimeUtc": "2026-07-18T04:27:49.968Z",
+      "mtimeMs": 1784348869968
+    },
+    "/Users/bpk/.cursor/projects/Users-bpk-Development-nvAux/agent-transcripts/28937132-eda6-42a7-8a18-01740c76b7e5/subagents/35ea2924-ff02-44dd-a28f-c75e246a1e17.jsonl": {
+      "mtimeUtc": "2026-07-18T04:25:06.479Z",
+      "mtimeMs": 1784348706479
     },
     "/Users/bpk/.cursor/projects/Users-bpk-Development-nvAux/agent-transcripts/28937132-eda6-42a7-8a18-01740c76b7e5/subagents/96f45ab8-9357-42b7-9f05-174cc4b961a3.jsonl": {
-      "mtimeUtc": "2026-07-18T04:21:18.401Z",
-      "mtimeMs": 1784348478401
+      "mtimeUtc": "2026-07-18T04:22:18.123Z",
+      "mtimeMs": 1784348538123
     },
     "/Users/bpk/.cursor/projects/Users-bpk-Development-nvAux/agent-transcripts/28937132-eda6-42a7-8a18-01740c76b7e5/subagents/ad35aca6-ce69-4ee2-b46a-5b62dd6e4ec2.jsonl": {
       "mtimeUtc": "2026-07-18T03:05:18.405Z",
@@ -70,6 +74,30 @@
     "/Users/bpk/.cursor/projects/Users-bpk-Development-nvAux/agent-transcripts/d0d38c62-2926-41ac-ae9b-652a89fa6d9c/subagents/2cb52019-a0ec-4856-a505-111579dfaa87.jsonl": {
       "mtimeUtc": "2026-07-18T03:10:38.616Z",
       "mtimeMs": 1784344238616
+    },
+    "/Users/bpk/.cursor/projects/Users-bpk-Development-nvAux/agent-transcripts/e3049518-d6cc-4be3-a3b1-6b9f2089d3b4/e3049518-d6cc-4be3-a3b1-6b9f2089d3b4.jsonl": {
+      "mtimeUtc": "2026-07-18T14:49:54.134Z",
+      "mtimeMs": 1784386194134
+    },
+    "/Users/bpk/.cursor/projects/Users-bpk-Development-nvAux/agent-transcripts/e3049518-d6cc-4be3-a3b1-6b9f2089d3b4/subagents/4f652bf9-7972-463f-aa55-3ce53a132d87.jsonl": {
+      "mtimeUtc": "2026-07-18T14:50:01.910Z",
+      "mtimeMs": 1784386201910
+    },
+    "/Users/bpk/.cursor/projects/Users-bpk-Development-nvAux/agent-transcripts/f2f9723f-9774-4c12-8a1d-f1e468b5805b/f2f9723f-9774-4c12-8a1d-f1e468b5805b.jsonl": {
+      "mtimeUtc": "2026-07-18T04:37:30.789Z",
+      "mtimeMs": 1784349450789
+    },
+    "/Users/bpk/.cursor/projects/Users-bpk-Development-nvAux/agent-transcripts/f2f9723f-9774-4c12-8a1d-f1e468b5805b/subagents/20f85946-363a-49a5-9ed0-bab5fd9674fc.jsonl": {
+      "mtimeUtc": "2026-07-18T04:34:41.219Z",
+      "mtimeMs": 1784349281219
+    },
+    "/Users/bpk/.cursor/projects/Users-bpk-Development-nvAux/agent-transcripts/f2f9723f-9774-4c12-8a1d-f1e468b5805b/subagents/71810dbf-e4d7-4486-ba25-852e363c8131.jsonl": {
+      "mtimeUtc": "2026-07-18T04:34:19.074Z",
+      "mtimeMs": 1784349259074
+    },
+    "/Users/bpk/.cursor/projects/Users-bpk-Development-nvAux/agent-transcripts/f2f9723f-9774-4c12-8a1d-f1e468b5805b/subagents/86357e4f-9641-405e-a24f-787628145c4f.jsonl": {
+      "mtimeUtc": "2026-07-18T04:34:34.486Z",
+      "mtimeMs": 1784349274486
     }
   }
 }

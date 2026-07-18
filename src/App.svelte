@@ -23,6 +23,7 @@
     showStatusBar,
     mainWindowZIndex,
     raiseMainWindow,
+    isMobile,
   } from './lib/store';
   import { windowFrame } from './utils/windowFrame';
 
@@ -37,8 +38,10 @@
   let mainContent = $state(null);
 
   let isDemo = $derived(!$fullScreen);
-  let isAppWindowed = $derived($fullScreen && $windowed);
-  let isAppFullscreen = $derived($fullScreen && !$windowed);
+  let isAppWindowed = $derived($fullScreen && $windowed && !$isMobile);
+  let isAppFullscreen = $derived($fullScreen && (!$windowed || $isMobile));
+  /** Desktop sidebar expands the window; mobile uses an overlay drawer. */
+  let layoutSidebarOpen = $derived($sidebarOpen && !$isMobile);
   let listChromePx = $derived(
     LIST_CHROME_BASE_PX + ($showStatusBar ? STATUS_BAR_CHROME_PX : 0)
   );
@@ -127,13 +130,28 @@
       <p>Capture and retrieve ideas at the speed of thought with nvAux, the in-the-zone note-taking app for creative professionals.</p>
     </div>
 
+    {#if $isMobile && $sidebarOpen}
+      <button
+        type="button"
+        class="sidebar-backdrop"
+        aria-label="Close sidebar"
+        onclick={() => ($sidebarOpen = false)}
+      ></button>
+    {/if}
+
+    {#if $isMobile}
+      <Sidebar />
+    {/if}
+
     <main
       use:windowFrame={{ enabled: isAppWindowed, threshold: 2 }}
       class="{isAppFullscreen ? 'fullscreen' : 'windowed'} relative overflow-hidden flex transition-all"
-      class:sidebar-open={$sidebarOpen}
+      class:sidebar-open={layoutSidebarOpen}
       style="background-color: var(--app-background); --sidebar-width: {$sidebarWidth}px;"
     >
-      <Sidebar />
+      {#if !$isMobile}
+        <Sidebar />
+      {/if}
       <div
         class="main-content relative flex flex-col flex-grow overflow-hidden min-w-0 min-h-0 h-full"
         bind:this={mainContent}
@@ -238,6 +256,18 @@
   .main-content {
     z-index: 1;
     background-color: var(--app-background);
+  }
+
+  .sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 49;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: rgba(0, 0, 0, 0.42);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
   }
 
   /* Invisible corner hit targets — cursor-only chrome */
