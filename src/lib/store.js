@@ -40,6 +40,7 @@ const storedWindowed = (() => {
   return false;
 })();
 const storedShowClock = JSON.parse(localStorage.getItem('showClock')) || "true";
+const storedShowStatusBar = readStoredBool('showStatusBar', true);
 const storedSidebarOpen = readStoredBool('sidebarOpen', false);
 const storedBirthDate = localStorage.getItem('birthDate') || '1982-05-24';
 const storedExpectedLongevity = localStorage.getItem('expectedLongevity') || '80';
@@ -161,6 +162,7 @@ export const fullScreen = writable(storedFullScreen);
 /** App Mode floating window (vs edge-to-edge fullscreen). */
 export const windowed = writable(storedWindowed);
 export const showClock = writable(storedShowClock);
+export const showStatusBar = writable(storedShowStatusBar);
 export const sidebarOpen = writable(storedSidebarOpen);
 export const birthDate = writable(storedBirthDate);
 export const expectedLongevity = writable(storedExpectedLongevity);
@@ -168,6 +170,114 @@ export const lifeCalendarStat = writable(storedLifeCalendarStat);
 export const LIFE_CALENDAR_STAT_MODES = LIFE_CALENDAR_STATS;
 /** Height of the media player bar under the Omnibar (0 when hidden). */
 export const mediaPlayerHeight = writable(0);
+
+/**
+ * Session-only floating note popups (App Windowed).
+ * @type {import('svelte/store').Writable<Array<{
+ *   id: string,
+ *   guid: string,
+ *   left: number,
+ *   top: number,
+ *   width: number,
+ *   height: number,
+ *   zIndex: number,
+ * }>>}
+ */
+export const notePopups = writable([]);
+
+const POPUP_DEFAULT_W = 420;
+const POPUP_DEFAULT_H = 320;
+const POPUP_CASCADE = 28;
+let notePopupZCounter = 40;
+
+/**
+ * Open a floating note popup for guid (App Windowed). One per guid — reopens raise existing.
+ * @param {string} guid
+ */
+export function openNotePopup(guid) {
+  if (!guid) return;
+  let raised = false;
+  notePopups.update((list) => {
+    const existing = list.find((p) => p.guid === guid);
+    if (existing) {
+      raised = true;
+      notePopupZCounter += 1;
+      return list.map((p) =>
+        p.id === existing.id ? { ...p, zIndex: notePopupZCounter } : p
+      );
+    }
+    notePopupZCounter += 1;
+    const index = list.length;
+    const width = POPUP_DEFAULT_W;
+    const height = POPUP_DEFAULT_H;
+    const left = Math.max(
+      16,
+      Math.round((window.innerWidth - width) / 2) + index * POPUP_CASCADE
+    );
+    const top = Math.max(
+      16,
+      Math.round((window.innerHeight - height) / 2) + index * POPUP_CASCADE
+    );
+    return [
+      ...list,
+      {
+        id: uuidv4(),
+        guid,
+        left,
+        top,
+        width,
+        height,
+        zIndex: notePopupZCounter,
+      },
+    ];
+  });
+  return raised;
+}
+
+/** @param {string} id */
+export function closeNotePopup(id) {
+  if (!id) return;
+  notePopups.update((list) => list.filter((p) => p.id !== id));
+}
+
+export function closeAllNotePopups() {
+  notePopups.set([]);
+}
+
+/** @param {string} id */
+export function raiseNotePopup(id) {
+  if (!id) return;
+  notePopups.update((list) => {
+    const target = list.find((p) => p.id === id);
+    if (!target) return list;
+    notePopupZCounter += 1;
+    return list.map((p) =>
+      p.id === id ? { ...p, zIndex: notePopupZCounter } : p
+    );
+  });
+}
+
+/**
+ * Sync geometry after drag/resize.
+ * @param {string} id
+ * @param {{ left: number, top: number, width: number, height: number }} rect
+ */
+export function updateNotePopupRect(id, rect) {
+  if (!id || !rect) return;
+  notePopups.update((list) =>
+    list.map((p) =>
+      p.id === id
+        ? {
+            ...p,
+            left: rect.left,
+            top: rect.top,
+            width: rect.width,
+            height: rect.height,
+          }
+        : p
+    )
+  );
+}
 
 /**
  * Open a note by guid in NoteDetail and select it in the list.
@@ -226,6 +336,7 @@ sidebarWidth.subscribe(v => localStorage.setItem('sidebarWidth', v.toString()));
 fullScreen.subscribe(v => localStorage.setItem('fullScreen', JSON.stringify(v)));
 windowed.subscribe(v => localStorage.setItem('windowed', JSON.stringify(v)));
 showClock.subscribe(v => localStorage.setItem('showClock', v));
+showStatusBar.subscribe(v => localStorage.setItem('showStatusBar', JSON.stringify(v)));
 sidebarOpen.subscribe(v => localStorage.setItem('sidebarOpen', JSON.stringify(v)));
 birthDate.subscribe(v => localStorage.setItem('birthDate', v));
 expectedLongevity.subscribe(v => localStorage.setItem('expectedLongevity', v));

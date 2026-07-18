@@ -28,6 +28,7 @@
     markdownPreview,
     db,
     openNoteByName,
+    showStatusBar,
   } from './store';
 
   import { debounce } from '../utils/debounce';
@@ -43,6 +44,7 @@
 
   import Settings from './Settings.svelte';
   import WikiLinkSuggest from './WikiLinkSuggest.svelte';
+  import NoteToolbar from './NoteToolbar.svelte';
 
   hljs.registerLanguage('bash', bash);
   hljs.registerLanguage('c', c);
@@ -90,6 +92,12 @@
       !isEmptyObject($selectedNote) &&
       $selectedNote.guid !== SETTINGS_GUID
   );
+
+  $effect(() => {
+    if (!canPreview && $markdownPreview) {
+      markdownPreview.set(false);
+    }
+  });
 
   let showPreview = $derived(canPreview && $markdownPreview);
 
@@ -253,7 +261,7 @@
   bind:clientWidth={innerWidth}
   bind:clientHeight={innerHeight}
   class="note-detail relative flex flex-col flex-1 min-h-0 overflow-hidden border-box"
-  style="background: var(--app-notedetail-background); margin-bottom: 35px;"
+  style="background: var(--app-notedetail-background); margin-bottom: {$showStatusBar ? '35px' : '0'};"
 >
   {#if isEmptyObject($selectedNote)}
     <div class="empty-state flex-1 min-h-0 w-full flex items-center justify-center">
@@ -263,41 +271,44 @@
     <div class="settings-scroll thin-scrollbar flex-1 min-h-0 overflow-y-auto">
       <Settings />
     </div>
-  {:else if showPreview}
-    <!-- Event delegation for [[wiki]] anchors inside {@html} preview -->
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-      class="markdown-preview thin-scrollbar flex-1 min-h-0 overflow-y-auto"
-      onclick={handlePreviewClick}
-    >
-      {@html previewHtml}
-    </div>
   {:else}
-    <div class="editor-shell relative flex-1 min-h-0 overflow-hidden">
-      <textarea
-        id="body-editor"
-        bind:this={editorEl}
-        class="body-editor thin-scrollbar absolute inset-0 w-full h-full overflow-y-auto block no-resize border-0 outline-none border-box bg-transparent"
-        bind:value={$bodyText}
-        oninput={handleEditorInput}
-        onkeydown={handleEditorKeydown}
-        onkeyup={handleEditorKeyup}
-        onclick={handleEditorClick}
-        onblur={handleEditorBlur}
-      ></textarea>
-      <WikiLinkSuggest
-        candidates={wikiCandidates}
-        selectedIndex={wikiSelectedIndex}
-        left={wikiLeft}
-        top={wikiTop}
-        visible={wikiVisible}
-        onSelect={acceptWikiSuggestion}
-        onHover={(i) => {
-          wikiSelectedIndex = i;
-        }}
-      />
-    </div>
+    <NoteToolbar />
+    {#if showPreview}
+      <!-- Event delegation for [[wiki]] anchors inside {@html} preview -->
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        class="markdown-preview thin-scrollbar flex-1 min-h-0 overflow-y-auto"
+        onclick={handlePreviewClick}
+      >
+        {@html previewHtml}
+      </div>
+    {:else}
+      <div class="editor-shell relative flex-1 min-h-0 overflow-hidden">
+        <textarea
+          id="body-editor"
+          bind:this={editorEl}
+          class="body-editor thin-scrollbar absolute inset-0 w-full h-full overflow-y-auto block no-resize border-0 outline-none border-box bg-transparent"
+          bind:value={$bodyText}
+          oninput={handleEditorInput}
+          onkeydown={handleEditorKeydown}
+          onkeyup={handleEditorKeyup}
+          onclick={handleEditorClick}
+          onblur={handleEditorBlur}
+        ></textarea>
+        <WikiLinkSuggest
+          candidates={wikiCandidates}
+          selectedIndex={wikiSelectedIndex}
+          left={wikiLeft}
+          top={wikiTop}
+          visible={wikiVisible}
+          onSelect={acceptWikiSuggestion}
+          onHover={(i) => {
+            wikiSelectedIndex = i;
+          }}
+        />
+      </div>
+    {/if}
   {/if}
 </div>
 

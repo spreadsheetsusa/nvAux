@@ -8,12 +8,25 @@
   import StatusBar from './lib/StatusBar.svelte';
   import AudioPlayer from './lib/AudioPlayer.svelte';
   import Sidebar from './lib/Sidebar.svelte';
+  import NotePopupWindow from './lib/NotePopupWindow.svelte';
 
-  import { fullScreen, windowed, sidebarOpen, sidebarWidth, noteListHeight, mediaPlayerHeight } from './lib/store';
+  import {
+    fullScreen,
+    windowed,
+    sidebarOpen,
+    sidebarWidth,
+    noteListHeight,
+    mediaPlayerHeight,
+    notePopups,
+    closeAllNotePopups,
+    showStatusBar,
+  } from './lib/store';
   import { windowFrame } from './utils/windowFrame';
 
-  /** Chrome below/above the note list that must stay visible (OmniBar, handle, StatusBar, margins). */
-  const LIST_CHROME_PX = 100;
+  /** Chrome below/above the note list excluding the status bar (OmniBar, handle, margins). */
+  const LIST_CHROME_BASE_PX = 65;
+  /** Status bar height used when reserving space for NoteDetail clamping. */
+  const STATUS_BAR_CHROME_PX = 35;
   /** Minimum NoteDetail viewport so body content is never pushed past the fold. */
   const NOTE_DETAIL_MIN_PX = 120;
   const NOTE_LIST_MIN_PX = 60;
@@ -23,10 +36,18 @@
   let isDemo = $derived(!$fullScreen);
   let isAppWindowed = $derived($fullScreen && $windowed);
   let isAppFullscreen = $derived($fullScreen && !$windowed);
+  let listChromePx = $derived(
+    LIST_CHROME_BASE_PX + ($showStatusBar ? STATUS_BAR_CHROME_PX : 0)
+  );
+
+  // Popups are Windowed-only — close all when leaving App Windowed.
+  $effect(() => {
+    if (!isAppWindowed) closeAllNotePopups();
+  });
 
   function getNoteListMax() {
     if (!mainContent) return 600;
-    const reserved = LIST_CHROME_PX + NOTE_DETAIL_MIN_PX + $mediaPlayerHeight;
+    const reserved = listChromePx + NOTE_DETAIL_MIN_PX + $mediaPlayerHeight;
     return Math.max(NOTE_LIST_MIN_PX, mainContent.clientHeight - reserved);
   }
 
@@ -38,8 +59,9 @@
   // Keep NoteDetail on-screen when the app window (or media chrome) shrinks.
   $effect(() => {
     const el = mainContent;
-    // Re-run when media player height changes reserved space.
+    // Re-run when media player / status bar chrome changes reserved space.
     void $mediaPlayerHeight;
+    void listChromePx;
     if (!el) return;
 
     clampNoteListHeight();
@@ -110,9 +132,25 @@
         ariaLabel="Resize note list"
       />
       <NoteDetail />
-      <StatusBar />
+      {#if $showStatusBar}
+        <StatusBar />
+      {/if}
     </div>
   </main>
+
+  {#if isAppWindowed}
+    {#each $notePopups as popup (popup.id)}
+      <NotePopupWindow
+        id={popup.id}
+        guid={popup.guid}
+        left={popup.left}
+        top={popup.top}
+        width={popup.width}
+        height={popup.height}
+        zIndex={popup.zIndex}
+      />
+    {/each}
+  {/if}
 </div>
 
 <style>

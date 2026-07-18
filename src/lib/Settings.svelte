@@ -1,6 +1,6 @@
 <script>
   import { differenceInYears } from 'date-fns';
-  import { db, windowed, showClock, fullScreen, birthDate, expectedLongevity } from './store';
+  import { db, windowed, showClock, showStatusBar, fullScreen, birthDate, expectedLongevity } from './store';
 
   import DownloadNotesZip from './DownloadNotesZip.svelte';
   import ImportNotesZip from './ImportNotesZip.svelte';
@@ -59,6 +59,9 @@
 
       <div>
         <label for="showClock"><input id="showClock" type="checkbox" bind:checked={$showClock} /> Show Clock</label>
+      </div>
+      <div style="margin-top: 15px;">
+        <label for="showStatusBar"><input id="showStatusBar" type="checkbox" bind:checked={$showStatusBar} /> Show Status bar</label>
       </div>
       <div style="margin-top: 15px;">
         <label for="fullScreen"><input id="fullScreen" type="checkbox" bind:checked={$fullScreen} /> App Mode</label>

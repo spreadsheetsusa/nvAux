@@ -1,12 +1,29 @@
 <script>
-  let { note, x = 0, y = 0, ondelete, onclose } = $props();
+  let {
+    note,
+    x = 0,
+    y = 0,
+    showOpenInNewWindow = false,
+    ondelete,
+    onrename,
+    onclose,
+    onOpenInNewWindow,
+  } = $props();
 
   function handleDelete() {
     ondelete?.(note);
   }
 
+  function handleRename() {
+    onrename?.(note);
+  }
+
   function handleClose() {
     onclose?.();
+  }
+
+  function handleOpenInNewWindow() {
+    onOpenInNewWindow?.(note);
   }
 </script>
 
@@ -14,6 +31,12 @@
   class="context-menu"
   style="position: fixed; left: {x}px; top: {y}px; background: var(--app-omni-background); border: 1px solid var(--app-statusbar-border); border-radius: 4px; padding: 5px; z-index: 1000;"
 >
+  {#if showOpenInNewWindow}
+    <button class="block w-full bg-transparent" onclick={handleOpenInNewWindow}>
+      Open in new window
+    </button>
+  {/if}
+  <button class="block w-full bg-transparent" onclick={handleRename}>Rename</button>
   <button class="block w-full bg-transparent" onclick={handleDelete}>Delete</button>
   <button class="block w-full bg-transparent" onclick={handleClose}>Close</button>
 </div>
