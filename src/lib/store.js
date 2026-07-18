@@ -91,16 +91,15 @@ const _create = async () => {
 
   await db.addCollections({ notes: { schema } });
 
-  const notes = await db.notes.find().exec();
+  const WELCOME_GUID = '11111111-1111-1111-1111-111111111111';
+  const SETTINGS_GUID = '00000000-0000-0000-0000-000000000000';
 
-  let welcomeNote = await db.notes.findOne('11111111-1111-1111-1111-111111111111').exec();
-
-  setTimeout(() => {
-    if (notes.length === 0 && !welcomeNote) {
-      db.notes.insert({
-        guid: '11111111-1111-1111-1111-111111111111',
-        name: '🚀 Welcome to nvAux!',
-        body: `Welcome and thank you for using nvAux!
+  const welcomeNote = await db.notes.findOne(WELCOME_GUID).exec();
+  if (!welcomeNote) {
+    await db.notes.insert({
+      guid: WELCOME_GUID,
+      name: '🚀 Welcome to nvAux!',
+      body: `Welcome and thank you for using nvAux!
 
 This is a web-based note-taking app inspired by nvALT where searching and creating notes is one in the same action. A few things to keep in-mind:
 
@@ -114,31 +113,36 @@ You can download your notes at any time by clicking the 'Download Notes' button 
 
 Don't forget to follow the project on 𝕏 at @nvAuxApp and let us know what you think!
   `,
-        createdAt: new Date().getTime(),
-        updatedAt: new Date().getTime()
-      });
-    };
-  }, 100);
+      createdAt: new Date().getTime(),
+      updatedAt: new Date().getTime(),
+    });
+  }
 
   // Always make sure the Settings Note exists
-  let settingsNote = await db.notes.findOne('00000000-0000-0000-0000-000000000000').exec();
-
+  const settingsNote = await db.notes.findOne(SETTINGS_GUID).exec();
   if (!settingsNote) {
     await db.notes.insert({
-      guid: '00000000-0000-0000-0000-000000000000',
+      guid: SETTINGS_GUID,
       name: '⚙️ nvAux Settings',
       body: 'Adjust Your nvAux Preferences',
       createdAt: new Date().getTime(),
-      updatedAt: new Date().getTime()
+      updatedAt: new Date().getTime(),
     });
-  };
+  }
 
-
-  dbPromise = db;
   return db;
 };
 
-export const db = () => dbPromise ? dbPromise : _create();
+/** Single shared DB open — must assign the promise immediately to avoid concurrent creates. */
+export const db = () => {
+  if (!dbPromise) {
+    dbPromise = _create().catch((err) => {
+      dbPromise = undefined;
+      throw err;
+    });
+  }
+  return dbPromise;
+};
 
 /**
  * Svelte Writables ************************************************************
