@@ -79,7 +79,7 @@
 
   <div class="column-cards thin-scrollbar flex-1 min-h-0 overflow-y-auto" role="list">
     {#each column.cards as card (card.id)}
-      <div class="card-flip" animate:flip={{ duration: 180 }}>
+      <div class="card-flip" animate:flip={{ duration: 220 }}>
         <KanbanCard
           {card}
           {density}
@@ -100,7 +100,8 @@
 
 <style>
   .kanban-column {
-    width: min(260px, calc(100vw - 48px));
+    /* Size against the scroll plane, not the viewport — enables real overflow-x. */
+    width: min(260px, calc(100cqw - 24px));
     max-height: 100%;
     padding: 8px;
     border-radius: 8px;
@@ -111,7 +112,7 @@
   }
 
   .kanban-column.compact {
-    width: min(220px, calc(100vw - 56px));
+    width: min(220px, calc(100cqw - 32px));
     padding: 6px;
   }
 
@@ -178,7 +179,13 @@
     padding-right: 2px;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
-    touch-action: pan-y;
+    /* Allow horizontal board pan to win when gesture is mostly sideways. */
+    touch-action: pan-x pan-y;
+  }
+
+  .card-flip {
+    /* FLIP target wrapper — keep layout stable during animate:flip */
+    will-change: transform;
   }
 
   .add-card {

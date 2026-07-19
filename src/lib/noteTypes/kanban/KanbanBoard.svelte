@@ -41,11 +41,30 @@
   let dragOverColumnId = $state(null);
   let dragging = $state(false);
 
+  /** @type {{ title: string, width: number, height: number, x: number, y: number, compact: boolean } | null} */
+  let dragGhost = $state(null);
+
   /** @type {HTMLDivElement | undefined} */
   let boardEl = $state();
+  /** @type {HTMLDivElement | undefined} */
+  let boardScrollEl = $state();
 
   const DRAG_THRESHOLD = 8;
-  /** @type {{ cardId: string, pointerId: number, startX: number, startY: number, active: boolean, captureEl: Element | null } | null} */
+  const EDGE_SCROLL_PX = 48;
+  const EDGE_SCROLL_SPEED = 18;
+
+  /** @type {{
+   *   cardId: string,
+   *   pointerId: number,
+   *   startX: number,
+   *   startY: number,
+   *   offsetX: number,
+   *   offsetY: number,
+   *   active: boolean,
+   *   captureEl: Element | null,
+   *   originBoard: any,
+   *   dirty: boolean,
+   * } | null} */
   let pointerDrag = null;
 
   function emit(nextTheme, nextBoard) {
@@ -113,17 +132,35 @@
     }));
   }
 
+  function findCardPlacement(b, cardId) {
+    if (!b) return null;
+    for (const col of b.columns) {
+      const index = col.cards.findIndex((c) => c.id === cardId);
+      if (index >= 0) return { columnId: col.id, index };
+    }
+    return null;
+  }
+
+  function findCardTitle(b, cardId) {
+    if (!b) return '';
+    for (const col of b.columns) {
+      const card = col.cards.find((c) => c.id === cardId);
+      if (card) return card.title ?? '';
+    }
+    return '';
+  }
+
   function clearDrag() {
     dragCardId = null;
     dragOverCardId = null;
     dragOverColumnId = null;
     dragging = false;
+    dragGhost = null;
     pointerDrag = null;
     boardEl?.classList.remove('is-dragging');
   }
 
   /**
-   * Resolve drop target under pointer.
    * @param {number} clientX
    * @param {number} clientY
    */
@@ -133,6 +170,7 @@
     let columnId = null;
     for (const el of stack) {
       if (!(el instanceof Element)) continue;
+      if (el.closest?.('.kanban-drag-ghost')) continue;
       if (!cardId) {
         const card = el.closest?.('[data-kanban-card-id]');
         const id = card?.getAttribute?.('data-kanban-card-id');
@@ -148,10 +186,88 @@
     return { cardId, columnId };
   }
 
-  function updateDragOver(clientX, clientY) {
+  /**
+   * Live-move the dragged card so sibling cards FLIP into place.
+   * @param {number} clientX
+   * @param {number} clientY
+   */
+  function previewDropAt(clientX, clientY) {
+    if (!board || !dragCardId || !pointerDrag?.active) return;
+
     const { cardId, columnId } = hitTestDropTarget(clientX, clientY);
     dragOverCardId = cardId;
     dragOverColumnId = columnId;
+    if (!columnId) return;
+
+    let toIndex;
+    if (cardId) {
+      const placement = findCardPlacement(board, cardId);
+      if (!placement) return;
+      toIndex = placement.index;
+    } else {
+      const col = board.columns.find((c) => c.id === columnId);
+      if (!col) return;
+      toIndex = col.cards.length;
+    }
+
+    const current = findCardPlacement(board, dragCardId);
+    // Already at end of this column while hovering empty column body
+    if (
+      !cardId &&
+      current &&
+      current.columnId === columnId &&
+      current.index === toIndex - 1
+    ) {
+      return;
+    }
+    if (current && current.columnId === columnId && current.index === toIndex) {
+      return;
+    }
+
+    const next = moveCard(board, dragCardId, columnId, toIndex);
+    if (next === board) return;
+    const after = findCardPlacement(next, dragCardId);
+    if (
+      current &&
+      after &&
+      current.columnId === after.columnId &&
+      current.index === after.index
+    ) {
+      return;
+    }
+    board = next;
+    pointerDrag.dirty = true;
+  }
+
+  /**
+   * Auto-scroll the board plane when the pointer nears an edge.
+   * @param {number} clientX
+   * @param {number} clientY
+   */
+  function maybeEdgeScroll(clientX, clientY) {
+    const scroller = boardScrollEl;
+    if (!scroller) return;
+    const rect = scroller.getBoundingClientRect();
+    if (clientX < rect.left + EDGE_SCROLL_PX) {
+      scroller.scrollLeft -= EDGE_SCROLL_SPEED;
+    } else if (clientX > rect.right - EDGE_SCROLL_PX) {
+      scroller.scrollLeft += EDGE_SCROLL_SPEED;
+    }
+
+    // Vertical scroll inside the column under the pointer
+    const stack = document.elementsFromPoint?.(clientX, clientY) ?? [];
+    for (const el of stack) {
+      if (!(el instanceof Element)) continue;
+      const cards = el.closest?.('.column-cards');
+      if (!(cards instanceof HTMLElement)) continue;
+      const cRect = cards.getBoundingClientRect();
+      if (clientY < cRect.top + EDGE_SCROLL_PX) {
+        cards.scrollTop -= EDGE_SCROLL_SPEED;
+      } else if (clientY > cRect.bottom - EDGE_SCROLL_PX) {
+        cards.scrollTop += EDGE_SCROLL_SPEED;
+      }
+      break;
+    }
   }
 
   /**
@@ -164,13 +280,18 @@
     if (target?.closest?.('button, input, a, textarea')) return;
 
     const captureEl = target?.closest?.('[data-kanban-card-id]') ?? null;
+    const rect = captureEl?.getBoundingClientRect?.();
     pointerDrag = {
       cardId,
       pointerId: e.pointerId,
       startX: e.clientX,
       startY: e.clientY,
+      offsetX: rect ? e.clientX - rect.left : 12,
+      offsetY: rect ? e.clientY - rect.top : 12,
       active: false,
       captureEl,
+      originBoard: board,
+      dirty: false,
     };
     dragCardId = cardId;
 
@@ -183,6 +304,15 @@
         pointerDrag.active = true;
         dragging = true;
         boardEl?.classList.add('is-dragging');
+        const r = pointerDrag.captureEl?.getBoundingClientRect?.();
+        dragGhost = {
+          title: findCardTitle(board, pointerDrag.cardId),
+          width: r?.width ?? 200,
+          height: r?.height ?? 40,
+          x: ev.clientX - pointerDrag.offsetX,
+          y: ev.clientY - pointerDrag.offsetY,
+          compact: density === 'compact',
+        };
         try {
           pointerDrag.captureEl?.setPointerCapture?.(ev.pointerId);
         } catch {
@@ -190,7 +320,15 @@
         }
       }
       ev.preventDefault();
-      updateDragOver(ev.clientX, ev.clientY);
+      if (dragGhost) {
+        dragGhost = {
+          ...dragGhost,
+          x: ev.clientX - pointerDrag.offsetX,
+          y: ev.clientY - pointerDrag.offsetY,
+        };
+      }
+      maybeEdgeScroll(ev.clientX, ev.clientY);
+      previewDropAt(ev.clientX, ev.clientY);
     };
 
     const onUp = (ev) => {
@@ -200,31 +338,22 @@
       window.removeEventListener('pointercancel', onUp);
 
       const wasActive = pointerDrag.active;
-      const movingId = pointerDrag.cardId;
-      const overCard = dragOverCardId;
-      const overCol = dragOverColumnId;
+      const dirty = pointerDrag.dirty;
+      const origin = pointerDrag.originBoard;
+      const cancelled = ev.type === 'pointercancel';
       clearDrag();
 
-      if (!wasActive || !board || !movingId) return;
+      if (!wasActive || !board) return;
 
-      if (overCard && overCard !== movingId) {
-        let toColumnId = null;
-        let toIndex = 0;
-        for (const col of board.columns) {
-          const idx = col.cards.findIndex((c) => c.id === overCard);
-          if (idx >= 0) {
-            toColumnId = col.id;
-            toIndex = idx;
-            break;
-          }
-        }
-        if (toColumnId) emit(theme, moveCard(board, movingId, toColumnId, toIndex));
+      if (cancelled) {
+        if (origin) board = origin;
         return;
       }
 
-      if (overCol) {
-        const col = board.columns.find((c) => c.id === overCol);
-        if (col) emit(theme, moveCard(board, movingId, overCol, col.cards.length));
+      if (dirty) {
+        emit(theme, board);
+      } else if (origin && origin !== board) {
+        board = origin;
       }
     };
 
@@ -249,7 +378,10 @@
   {/if}
 
   {#if board}
-    <div class="board-scroll thin-scrollbar flex-1 min-h-0 overflow-x-auto overflow-y-hidden">
+    <div
+      class="board-scroll thin-scrollbar flex-1 min-h-0"
+      bind:this={boardScrollEl}
+    >
       <div class="board-row flex items-stretch gap-2 h-full">
         {#each board.columns as column (column.id)}
           <KanbanColumn
@@ -257,7 +389,7 @@
             {density}
             dragOverCardId={dragOverCardId}
             dragOverColumn={dragOverColumnId === column.id}
-            draggingCardId={dragCardId}
+            draggingCardId={dragging ? dragCardId : null}
             onRenameColumn={renameColumn}
             onDeleteColumn={deleteColumn}
             onAddCard={addCard}
@@ -272,17 +404,32 @@
       </div>
     </div>
   {/if}
+
+  {#if dragGhost}
+    <div
+      class="kanban-drag-ghost"
+      class:compact={dragGhost.compact}
+      style="width: {dragGhost.width}px; min-height: {dragGhost.height}px; transform: translate3d({dragGhost.x}px, {dragGhost.y}px, 0);"
+      aria-hidden="true"
+    >
+      {dragGhost.title}
+    </div>
+  {/if}
 </div>
 
 <style>
   .kanban-board {
     margin-top: 4px;
     position: relative;
+    /* Bound width so the plane can scroll instead of growing the flex parent. */
+    min-width: 0;
+    width: 100%;
   }
 
   .kanban-board.is-dragging {
     touch-action: none;
     user-select: none;
+    cursor: grabbing;
   }
 
   .parse-error {
@@ -293,10 +440,17 @@
   }
 
   .board-scroll {
+    min-width: 0;
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
     padding: 8px;
-    scroll-snap-type: x mandatory;
+    scroll-snap-type: x proximity;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-x: contain;
+    touch-action: pan-x pan-y;
+    container-type: inline-size;
+    container-name: kanban-plane;
   }
 
   .board-row {
@@ -308,7 +462,7 @@
 
   .add-column {
     align-self: flex-start;
-    width: min(140px, calc(100vw - 48px));
+    width: min(140px, calc(100cqw - 24px));
     min-height: 40px;
     height: 40px;
     scroll-snap-align: start;
@@ -323,6 +477,34 @@
   .add-column:hover {
     border-color: var(--kanban-accent, var(--app-accent));
     color: var(--kanban-accent, var(--app-accent));
+  }
+
+  .kanban-drag-ghost {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 2000;
+    pointer-events: none;
+    box-sizing: border-box;
+    display: flex;
+    align-items: flex-start;
+    padding: 10px 12px;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--kanban-accent, var(--app-accent)) 14%, var(--app-omni-background));
+    border: 1px solid color-mix(in srgb, var(--kanban-accent, var(--app-accent)) 40%, transparent);
+    color: var(--text-color, rgba(255, 255, 255, 0.9));
+    font-size: 13px;
+    line-height: 1.35;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    opacity: 0.96;
+    will-change: transform;
+  }
+
+  .kanban-drag-ghost.compact {
+    padding: 7px 8px;
+    font-size: 12px;
   }
 
   @media (max-width: 768px) {
