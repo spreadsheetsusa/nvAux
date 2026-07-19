@@ -10,36 +10,52 @@
 
 <section class="demo-marketing w-full flex flex-col items-center">
   <div class="demo-section text-center">
-    <h2>Features</h2>
+    <h2>A note app with session energy</h2>
+    <p class="section-copy">
+      nvAux is a local-first PWA for the browser: Omnibar-precise when you want an instrument,
+      deck-like when a note becomes a media session. Early build. Clear aim. Room to grow.
+    </p>
+  </div>
+
+  <div class="demo-section text-center">
+    <h2>Your life, measured in weeks</h2>
+    <p class="section-copy">
+      Life Calendar is the first lifetime-aware surface in a note app — every week you have lived,
+      and every week still ahead, laid out so your notes sit inside a life, not a folder tree.
+    </p>
+  </div>
+
+  <div class="demo-section text-center">
+    <h2>Notes that hold more than text</h2>
     <ul class="feature-list">
       <li>
-        <strong>Speed of thought</strong>
-        <span>Capture and retrieve ideas without leaving the zone — Omnibar-first, keyboard-native.</span>
+        <strong>Markdown &amp; wiki links</strong>
+        <span>Write in prose, fence code, wire ideas with <code>[[wiki-style]]</code> titles.</span>
       </li>
       <li>
-        <strong>Local-first PWA</strong>
-        <span>Your notes live in the browser. Offline-capable, no account required, single-file deployable.</span>
+        <strong>Media sessions</strong>
+        <span>SoundCloud and playlist notes keep playing while you move — a deck under the Omnibar.</span>
       </li>
       <li>
-        <strong>Life Calendar &amp; wiki links</strong>
-        <span>See your weeks at a glance, and connect notes with <code>[[wiki-style]]</code> links.</span>
+        <strong>Workspace chrome</strong>
+        <span>Settings, popout editors, Demo and App Mode — the same note model, different frames.</span>
       </li>
     </ul>
   </div>
 
   <div class="demo-section text-center">
-    <h2>How it works</h2>
+    <h2>One field. Search and create.</h2>
     <ol class="steps">
-      <li><span class="step-num">1</span> Type in the Omnibar to search or start a note.</li>
-      <li><span class="step-num">2</span> The list filters as you type — click or arrow to open.</li>
-      <li><span class="step-num">3</span> Press Enter to create when nothing matches.</li>
+      <li><span class="step-num">1</span> Type in the Omnibar — the list narrows as you go.</li>
+      <li><span class="step-num">2</span> Arrow or click to open what already exists.</li>
+      <li><span class="step-num">3</span> Hit Enter on a new name — that is the note.</li>
     </ol>
   </div>
 
   <div class="demo-section text-center cta-section">
-    <h2>Ready to go full screen?</h2>
+    <h2>Go edge to edge</h2>
     <p class="cta-copy">
-      Enter App Mode for an edge-to-edge workspace. You can always minimize back to Demo from the Omnibar.
+      App Mode fills the viewport. Minimize from the Omnibar anytime to return here.
     </p>
     <button type="button" class="cta-btn" onclick={enterAppMode}>
       Try App Mode
@@ -76,6 +92,12 @@
     margin: 0 0 1.5rem;
     opacity: 0.9;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  }
+  .section-copy {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    opacity: 0.65;
   }
   .feature-list {
     list-style: none;
