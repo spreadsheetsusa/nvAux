@@ -103,8 +103,8 @@
     line-height: 1.35;
     cursor: grab;
     user-select: none;
-    /* Allow plane/column scroll until pointer drag activates. */
-    touch-action: manipulation;
+    /* Allow board horizontal + column vertical scroll until drag activates. */
+    touch-action: pan-x pan-y;
   }
 
   .kanban-card.compact {
@@ -119,9 +119,10 @@
   }
 
   .kanban-card.dragging {
-    opacity: 0.72;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    opacity: 0;
+    box-shadow: none;
     touch-action: none;
+    pointer-events: none;
   }
 
   .kanban-card.drag-over {
