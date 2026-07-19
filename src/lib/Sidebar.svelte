@@ -104,6 +104,8 @@
     height: 100%;
     /* Cap against the layout viewport too — visualViewport/dvw can disagree on iOS. */
     max-width: calc(100% - var(--drawer-peek, 36px));
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
     padding-left: env(safe-area-inset-left, 0px);
     background-color: var(--app-statusbar-background);
     border-right: 1px solid var(--app-statusbar-border);
