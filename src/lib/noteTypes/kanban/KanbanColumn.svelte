@@ -8,17 +8,13 @@
     density = 'comfortable',
     dragOverCardId = null,
     dragOverColumn = false,
+    draggingCardId = null,
     onRenameColumn,
     onDeleteColumn,
     onAddCard,
     onRenameCard,
     onDeleteCard,
-    onCardDragStart,
-    onCardDragOver,
-    onCardDrop,
-    onCardDragEnd,
-    onColumnDragOver,
-    onColumnDrop,
+    onCardPointerDown,
   } = $props();
 
   let editingTitle = $state(false);
@@ -47,14 +43,12 @@
   }
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
 <section
   class="kanban-column flex flex-col flex-shrink-0"
   class:compact={density === 'compact'}
   class:drag-over={dragOverColumn}
+  data-kanban-column-id={column.id}
   aria-label={column.title}
-  ondragover={(e) => onColumnDragOver?.(column.id, e)}
-  ondrop={(e) => onColumnDrop?.(column.id, e)}
 >
   <header class="column-header flex items-center gap-1">
     {#if editingTitle}
@@ -90,12 +84,10 @@
           {card}
           {density}
           dragOver={dragOverCardId === card.id}
+          dragging={draggingCardId === card.id}
           onRename={onRenameCard}
           onDelete={onDeleteCard}
-          onDragStart={onCardDragStart}
-          onDragOver={onCardDragOver}
-          onDrop={onCardDrop}
-          onDragEnd={onCardDragEnd}
+          onPointerDown={onCardPointerDown}
         />
       </div>
     {/each}
@@ -108,16 +100,18 @@
 
 <style>
   .kanban-column {
-    width: 260px;
+    width: min(260px, calc(100vw - 48px));
     max-height: 100%;
     padding: 8px;
     border-radius: 8px;
     background: color-mix(in srgb, var(--app-notedetail-background) 70%, #000);
     border: 1px solid var(--app-statusbar-border, #2b2d30);
+    scroll-snap-align: start;
+    scroll-snap-stop: normal;
   }
 
   .kanban-column.compact {
-    width: 220px;
+    width: min(220px, calc(100vw - 56px));
     padding: 6px;
   }
 
@@ -128,7 +122,7 @@
 
   .column-header {
     margin-bottom: 8px;
-    min-height: 28px;
+    min-height: 32px;
   }
 
   .column-title {
@@ -150,7 +144,7 @@
     color: var(--text-color);
     font-size: 13px;
     font-weight: 600;
-    padding: 2px 6px;
+    padding: 4px 6px;
     outline: none;
   }
 
@@ -161,8 +155,8 @@
   }
 
   .col-btn {
-    width: 22px;
-    height: 22px;
+    width: 28px;
+    height: 28px;
     border: none;
     border-radius: 4px;
     background: transparent;
@@ -171,6 +165,7 @@
     font-size: 16px;
     line-height: 1;
     padding: 0;
+    flex-shrink: 0;
   }
 
   .col-btn:hover {
@@ -181,6 +176,9 @@
   .column-cards {
     min-height: 40px;
     padding-right: 2px;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
   }
 
   .add-card {
@@ -191,7 +189,8 @@
     background: transparent;
     color: #7e848c;
     font-size: 12px;
-    padding: 6px;
+    padding: 10px 6px;
+    min-height: 40px;
     cursor: pointer;
     text-align: left;
   }
@@ -199,5 +198,23 @@
   .add-card:hover {
     background: rgba(255, 255, 255, 0.06);
     color: var(--kanban-accent, var(--app-accent));
+  }
+
+  @media (max-width: 768px) {
+    .column-header {
+      min-height: 36px;
+    }
+
+    .col-btn {
+      width: 36px;
+      height: 36px;
+      font-size: 18px;
+    }
+
+    .add-card {
+      min-height: 44px;
+      padding: 12px 8px;
+      font-size: 13px;
+    }
   }
 </style>

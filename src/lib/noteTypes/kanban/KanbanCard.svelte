@@ -6,11 +6,9 @@
     density = 'comfortable',
     onRename,
     onDelete,
-    onDragStart,
-    onDragOver,
-    onDrop,
-    onDragEnd,
+    onPointerDown,
     dragOver = false,
+    dragging = false,
   } = $props();
 
   let editing = $state(false);
@@ -44,18 +42,23 @@
       cancelEdit();
     }
   }
+
+  /** @param {PointerEvent} e */
+  function handlePointerDown(e) {
+    if (editing) return;
+    onPointerDown?.(card.id, e);
+  }
 </script>
 
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   class="kanban-card"
   class:compact={density === 'compact'}
   class:drag-over={dragOver}
+  class:dragging
   class:editing
-  draggable={!editing}
-  ondragstart={(e) => onDragStart?.(card.id, e)}
-  ondragover={(e) => onDragOver?.(card.id, e)}
-  ondrop={(e) => onDrop?.(card.id, e)}
-  ondragend={() => onDragEnd?.()}
+  data-kanban-card-id={card.id}
+  onpointerdown={handlePointerDown}
   role="listitem"
 >
   {#if editing}
@@ -69,7 +72,7 @@
     />
   {:else}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="card-title truncate" ondblclick={startEdit} title="Double-click to rename">
+    <div class="card-title" ondblclick={startEdit} title="Double-click to rename">
       {card.title}
     </div>
   {/if}
@@ -90,7 +93,7 @@
     display: flex;
     align-items: flex-start;
     gap: 6px;
-    padding: 8px 10px;
+    padding: 10px 10px;
     margin-bottom: 6px;
     border-radius: 6px;
     background: color-mix(in srgb, var(--kanban-accent, var(--app-accent)) 8%, var(--app-omni-background));
@@ -100,16 +103,25 @@
     line-height: 1.35;
     cursor: grab;
     user-select: none;
+    /* Allow plane/column scroll until pointer drag activates. */
+    touch-action: manipulation;
   }
 
   .kanban-card.compact {
-    padding: 5px 8px;
+    padding: 7px 8px;
     margin-bottom: 4px;
     font-size: 12px;
   }
 
-  .kanban-card:active {
+  .kanban-card:active,
+  .kanban-card.dragging {
     cursor: grabbing;
+  }
+
+  .kanban-card.dragging {
+    opacity: 0.72;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    touch-action: none;
   }
 
   .kanban-card.drag-over {
@@ -118,11 +130,14 @@
 
   .kanban-card.editing {
     cursor: text;
+    touch-action: auto;
   }
 
   .card-title {
     flex: 1;
     min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   .card-title-input {
@@ -139,8 +154,8 @@
 
   .card-delete {
     flex-shrink: 0;
-    width: 20px;
-    height: 20px;
+    width: 28px;
+    height: 28px;
     border: none;
     border-radius: 4px;
     background: transparent;
@@ -154,5 +169,18 @@
   .card-delete:hover {
     background: rgba(255, 255, 255, 0.08);
     color: rgba(255, 255, 255, 0.9);
+  }
+
+  @media (max-width: 768px) {
+    .kanban-card {
+      padding: 12px 12px;
+      min-height: 44px;
+    }
+
+    .card-delete {
+      width: 36px;
+      height: 36px;
+      font-size: 18px;
+    }
   }
 </style>
