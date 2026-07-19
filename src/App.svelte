@@ -124,7 +124,7 @@
       <div style="perspective: {isDemo ? '150' : '0'}px;" class="transition-all">
         <h1 style="opacity: 0.9; text-shadow: 1px 3px 5px rgba(0,0,0,0.5); transform: rotateX(6deg) rotateY(0deg); transform-style: preserve-3d;">nvAux</h1>
       </div>
-      <p>Capture and retrieve ideas at the speed of thought with nvAux, the in-the-zone note-taking app for creative professionals.</p>
+      <p>Notes that hold anything. A calendar that holds a life.</p>
     </div>
 
     {#if $isMobile && $sidebarOpen}
