@@ -10,55 +10,66 @@
 
 <section class="demo-marketing w-full flex flex-col items-center">
   <div class="demo-section text-center">
-    <h2>A note app with session energy</h2>
+    <h2>Built like a tool. Feels like a studio.</h2>
     <p class="section-copy">
-      nvAux is a local-first PWA for the browser: Omnibar-precise when you want an instrument,
-      deck-like when a note becomes a media session. Early build. Clear aim. Room to grow.
+      nvAux is a local-first note app with the precision of a command palette and the energy of a
+      media deck. One Omnibar. Persistent sessions. Floating windows when you want them. An early
+      product with a long runway — and a clear point of view.
     </p>
   </div>
 
   <div class="demo-section text-center">
-    <h2>Your life, measured in weeks</h2>
+    <h2>The first lifetime-aware note app</h2>
     <p class="section-copy">
-      Life Calendar is the first lifetime-aware surface in a note app — every week you have lived,
-      and every week still ahead, laid out so your notes sit inside a life, not a folder tree.
+      Life Calendar lays out every week you have lived and every week still ahead. Your meta sits
+      inside the span of a life — not a folder tree, not a blank archive. Time is the organizing
+      principle.
     </p>
   </div>
 
   <div class="demo-section text-center">
-    <h2>Notes that hold more than text</h2>
+    <h2>A note can be anything</h2>
     <ul class="feature-list">
       <li>
-        <strong>Markdown &amp; wiki links</strong>
-        <span>Write in prose, fence code, wire ideas with <code>[[wiki-style]]</code> titles.</span>
+        <strong>Prose, code, and wiki links</strong>
+        <span>
+          Markdown when you need it. <code>[[wiki-style]]</code> titles when ideas should wire
+          together.
+        </span>
       </li>
       <li>
-        <strong>Media sessions</strong>
-        <span>SoundCloud and playlist notes keep playing while you move — a deck under the Omnibar.</span>
+        <strong>A media deck under the Omnibar</strong>
+        <span>
+          Queue SoundCloud from any note. Keep the session playing while you write, search, and
+          switch.
+        </span>
       </li>
       <li>
-        <strong>Workspace chrome</strong>
-        <span>Settings, popout editors, Demo and App Mode — the same note model, different frames.</span>
+        <strong>Chrome that moves with you</strong>
+        <span>
+          Demo, fullscreen, windowed — same notes, different frames. Pop out editors when one pane
+          is not enough.
+        </span>
       </li>
     </ul>
   </div>
 
   <div class="demo-section text-center">
-    <h2>One field. Search and create.</h2>
+    <h2>Search and create are the same gesture</h2>
     <ol class="steps">
       <li><span class="step-num">1</span> Type in the Omnibar — the list narrows as you go.</li>
       <li><span class="step-num">2</span> Arrow or click to open what already exists.</li>
-      <li><span class="step-num">3</span> Hit Enter on a new name — that is the note.</li>
+      <li><span class="step-num">3</span> Press Enter on a new name — that is the note.</li>
     </ol>
   </div>
 
   <div class="demo-section text-center cta-section">
-    <h2>Go edge to edge</h2>
+    <h2>Take the full surface</h2>
     <p class="cta-copy">
       App Mode fills the viewport. Minimize from the Omnibar anytime to return here.
     </p>
     <button type="button" class="cta-btn" onclick={enterAppMode}>
-      Try App Mode
+      Enter App Mode
     </button>
     <p class="credit">
       <span>Designed and Built by</span>
@@ -172,7 +183,9 @@
     font-size: 0.9rem;
     font-weight: 600;
     box-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.45);
-    transition: opacity 150ms ease, transform 150ms ease;
+    transition:
+      opacity 150ms ease,
+      transform 150ms ease;
   }
   .cta-btn:hover {
     opacity: 0.92;
