@@ -36,10 +36,6 @@ export const schema = {
       "minimum": 0,
       "maximum": 1.7976931348623157e+308
     },
-    currentSelection: {
-      type: 'string',
-      "description": "text selection within note body (if any)"
-    },
   },
   required: ['guid', 'name', 'createdAt', 'updatedAt'],
   /** Encrypted at rest via RxDB encryption-crypto-js (guid/timestamps stay queryable). */

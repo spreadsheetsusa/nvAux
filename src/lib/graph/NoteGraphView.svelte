@@ -8,17 +8,16 @@
     openNoteByName,
     selectNoteByGuid,
     selectedNote,
-  } from './store';
-  import { buildNoteGraph } from '../utils/wikiLinks';
-  import { createForceSimulation } from '../utils/forceGraph';
-  import ResizeHandle from './ResizeHandle.svelte';
+  } from '$lib/store';
+  import { buildNoteGraph } from '../../utils/wikiLinks';
+  import { createForceSimulation } from '../../utils/forceGraph';
+  import ResizeHandle from '$lib/components/chrome/ResizeHandle.svelte';
   import Icon from '$lib/components/Icon.svelte';
 
   const GRAPH_MIN_PX = 140;
   const CALENDAR_MIN_PX = 120;
   const ZOOM_MIN = 0.35;
   const ZOOM_MAX = 8;
-  const ZOOM_FIT = 1;
   /** Titles stay off until clearly zoomed in past the overview. */
   const LABEL_ZOOM = 1.55;
   const SELECTED_LABEL_ZOOM = 1.15;
@@ -100,14 +99,6 @@
 
   function close() {
     graphViewOpen.set(false);
-  }
-
-  /** Reset pan and zoom so the full graph fits the viewport. */
-  function zoomToFit() {
-    refreshBounds();
-    panX = 0;
-    panY = 0;
-    graphViewZoom.set(ZOOM_FIT);
   }
 
   function refreshBounds() {
@@ -244,14 +235,18 @@
     let cancelled = false;
 
     (async () => {
-      const database = await db();
-      if (cancelled) return;
-      notesSub = database.notes.find().$.subscribe((docs) => {
-        clearTimeout(rebuildTimer);
-        rebuildTimer = window.setTimeout(() => {
-          if (!cancelled) applyGraph(docs);
-        }, 120);
-      });
+      try {
+        const database = await db();
+        if (cancelled) return;
+        notesSub = database.notes.find().$.subscribe((docs) => {
+          clearTimeout(rebuildTimer);
+          rebuildTimer = window.setTimeout(() => {
+            if (!cancelled) applyGraph(docs);
+          }, 120);
+        });
+      } catch (err) {
+        if (!cancelled) console.error('Graph view failed to open notes DB:', err);
+      }
     })();
 
     return () => {
@@ -486,18 +481,9 @@
     ariaLabel="Resize graph view"
   />
 
-  <div class="graph-header flex items-center justify-between flex-shrink-0 px-3">
-    <span class="graph-title select-none">Graph View</span>
-    <div class="graph-header-actions flex items-center justify-end gap-3">
-      <button
-        type="button"
-        class="graph-icon-btn flex items-center justify-center"
-        aria-label="Zoom to fit"
-        title="Zoom to fit"
-        onclick={zoomToFit}
-      >
-        <Icon name="ZoomFit" />
-      </button>
+  <div class="graph-header flex items-center flex-shrink-0 min-w-0">
+    <span class="graph-title flex-1 min-w-0 select-none">Graph View</span>
+    <div class="graph-header-actions flex items-center justify-end flex-shrink-0">
       <button
         type="button"
         class="graph-icon-btn flex items-center justify-center"
@@ -602,14 +588,17 @@
   }
 
   .graph-header {
-    height: 34px;
-    margin-top: 2px;
+    margin: 11px 15px;
+    gap: 6px;
   }
 
   .graph-title {
-    font-size: 11px;
-    letter-spacing: 0.04em;
     opacity: 0.7;
+    font-size: 14px;
+    letter-spacing: 0.04em;
+    color: inherit;
+    padding: 0;
+    margin: 0;
   }
 
   .graph-icon-btn {

@@ -1,5 +1,5 @@
 <script>
-  import AbstractlyLogo from '../../AbstractlyLogo.svelte';
+  import AbstractlyLogo from '$lib/settings/AbstractlyLogo.svelte';
 </script>
 
 <footer class="mkt-footer">

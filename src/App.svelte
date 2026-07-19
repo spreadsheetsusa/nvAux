@@ -1,19 +1,20 @@
 <script>
   import { onMount } from 'svelte';
 
-  import OmniBar from './lib/OmniBar.svelte';
-  import NoteList from './lib/NoteList.svelte';
-  import ResizeHandle from './lib/ResizeHandle.svelte';
-  import NoteDetail from './lib/NoteDetail.svelte';
-  import StatusBar from './lib/StatusBar.svelte';
-  import AudioPlayer from './lib/AudioPlayer.svelte';
-  import Sidebar from './lib/Sidebar.svelte';
-  import NotePopupWindow from './lib/NotePopupWindow.svelte';
-  import StickyNote from './lib/StickyNote.svelte';
-  import DemoMarketing from './lib/components/marketing/DemoMarketing.svelte';
-  import DemoAccentPresets from './lib/components/marketing/DemoAccentPresets.svelte';
+  import OmniBar from '$lib/components/chrome/OmniBar.svelte';
+  import NoteList from '$lib/notes/NoteList.svelte';
+  import ResizeHandle from '$lib/components/chrome/ResizeHandle.svelte';
+  import NoteDetail from '$lib/notes/NoteDetail.svelte';
+  import StatusBar from '$lib/components/chrome/StatusBar.svelte';
+  import AudioPlayer from '$lib/media/AudioPlayer.svelte';
+  import Sidebar from '$lib/components/chrome/Sidebar.svelte';
+  import NotePopupWindow from '$lib/windowed/NotePopupWindow.svelte';
+  import StickyNote from '$lib/windowed/StickyNote.svelte';
+  import DemoMarketing from '$lib/components/marketing/DemoMarketing.svelte';
+  import DemoAccentPresets from '$lib/components/marketing/DemoAccentPresets.svelte';
 
   import {
+    db,
     fullScreen,
     windowed,
     sidebarOpen,
@@ -21,7 +22,7 @@
     noteListHeight,
     mediaPlayerHeight,
     notePopups,
-    closeAllNotePopups,
+    closeAllEditorPopups,
     showStatusBar,
     mainWindowZIndex,
     raiseMainWindow,
@@ -29,8 +30,11 @@
     appWindowFrame,
     persistAppWindowFrame,
     syncStickyNotes,
+    STICKY_Z_BASE,
     clampPersistedFramesToViewport,
-  } from './lib/store';
+    resetDatabase,
+    hardRefreshApp,
+  } from '$lib/store';
   import { windowFrame } from './utils/windowFrame';
 
   /** Chrome below/above the note list excluding the status bar (OmniBar, handle, margins). */
@@ -42,6 +46,8 @@
   const NOTE_LIST_MIN_PX = 60;
 
   let mainContent = $state(null);
+  let dbOpenError = $state('');
+  let dbRecoveryBusy = $state(false);
 
   let isDemo = $derived(!$fullScreen);
   let isAppWindowed = $derived($fullScreen && $windowed && !$isMobile);
@@ -51,14 +57,12 @@
   let listChromePx = $derived(
     LIST_CHROME_BASE_PX + ($showStatusBar ? STATUS_BAR_CHROME_PX : 0)
   );
+  let stickyPopups = $derived($notePopups.filter((p) => p.kind === 'sticky'));
+  let editorPopups = $derived($notePopups.filter((p) => p.kind === 'popup'));
 
-  // Popups / stickies are Windowed-only — close all when leaving; auto-surface stickies on enter.
+  // Stickies float in every mode; editor popups are Windowed-only.
   $effect(() => {
-    if (!isAppWindowed) {
-      closeAllNotePopups();
-      return;
-    }
-    void syncStickyNotes();
+    if (!isAppWindowed) closeAllEditorPopups();
   });
 
   function handleAppWindowFrame(rect) {
@@ -100,31 +104,76 @@
   });
 
   onMount(() => {
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker
-        .register("/service-worker.js")
-        .then((registration) => {
-          registration.addEventListener("updatefound", () => {
-            // If updatefound is fired, it means that there's
-            // a new service worker being installed.
-            const installingWorker = registration.installing;
-            console.log(
-              "A new service worker is being installed:",
-              installingWorker,
-            );
+    db()
+      .then(() => syncStickyNotes())
+      .catch((err) => {
+        dbOpenError = err?.message || 'Failed to open the notes database.';
+      });
 
-            // You can listen for changes to the installing service worker's
-            // state via installingWorker.onstatechange
-          });
-        })
-        .catch((error) => {
-          console.error(`Service worker registration failed: ${error}`);
-        });
-    } else {
-      console.error("Service workers are not supported.");
-    }
+    if (!("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.register("/service-worker.js").catch((error) => {
+      console.error(`Service worker registration failed: ${error}`);
+    });
   });
+
+  async function recoverResetDatabase() {
+    if (dbRecoveryBusy) return;
+    dbRecoveryBusy = true;
+    try {
+      await resetDatabase();
+      location.reload();
+    } catch (err) {
+      dbOpenError = err?.message || 'Reset failed. Try again.';
+      dbRecoveryBusy = false;
+    }
+  }
+
+  async function recoverHardRefresh() {
+    if (dbRecoveryBusy) return;
+    dbRecoveryBusy = true;
+    try {
+      await hardRefreshApp();
+      location.reload();
+    } catch (err) {
+      dbOpenError = err?.message || 'Hard refresh failed. Try again.';
+      dbRecoveryBusy = false;
+    }
+  }
 </script>
+
+{#if dbOpenError}
+  <div
+    class="db-open-error flex flex-col gap-2"
+    role="alert"
+    style="position: fixed; z-index: 10000; left: 12px; right: 12px; top: 12px; max-width: 520px; margin: 0 auto; padding: 14px 16px; border-radius: 8px; background: #2a1515; border: 1px solid #b41111; color: #fca5a5;"
+  >
+    <div class="font-bold text-white">Notes database failed to open</div>
+    <p class="text-sm m-0" style="line-height: 1.4; color: #fca5a5;">{dbOpenError}</p>
+    <p class="text-sm m-0 text-gray-400" style="line-height: 1.4;">
+      Reset restores seeded notes (prefs cleared). Hard Refresh clears caches only.
+    </p>
+    <div class="flex flex-wrap gap-2" style="margin-top: 4px;">
+      <button
+        type="button"
+        class="btn"
+        style="background: #b41111;"
+        disabled={dbRecoveryBusy}
+        onclick={recoverResetDatabase}
+      >
+        {dbRecoveryBusy ? 'Working…' : 'Reset Database'}
+      </button>
+      <button
+        type="button"
+        class="btn"
+        style="background: #3a3d42;"
+        disabled={dbRecoveryBusy}
+        onclick={recoverHardRefresh}
+      >
+        Hard Refresh
+      </button>
+    </div>
+  </div>
+{/if}
 
 <div
   class="w-screen flex flex-col items-center transition-all {isDemo
@@ -145,7 +194,7 @@
       <div style="perspective: {isDemo ? '150' : '0'}px;" class="transition-all">
         <h1 style="opacity: 0.9; text-shadow: 1px 3px 5px rgba(0,0,0,0.5); transform: rotateX(6deg) rotateY(0deg); transform-style: preserve-3d;">nvAux</h1>
       </div>
-      <p>Capture and retrieve ideas at the speed of thought with nvAux, the in-the-zone note-taking app for creative professionals.</p>
+      <p class="text-balance">The multi-tool note-taking app for creative professionals that works at the speed of thought.</p>
       <DemoAccentPresets />
     </div>
 
@@ -208,32 +257,32 @@
   {#if isDemo}
     <DemoMarketing />
   {/if}
-
-  {#if isAppWindowed}
-    {#each $notePopups as popup (popup.id)}
-      {#if popup.kind === 'sticky'}
-        <StickyNote
-          id={popup.id}
-          guid={popup.guid}
-          left={popup.left}
-          top={popup.top}
-          color={popup.color ?? 'yellow'}
-          zIndex={popup.zIndex}
-        />
-      {:else}
-        <NotePopupWindow
-          id={popup.id}
-          guid={popup.guid}
-          left={popup.left}
-          top={popup.top}
-          width={popup.width}
-          height={popup.height}
-          zIndex={popup.zIndex}
-        />
-      {/if}
-    {/each}
-  {/if}
 </div>
+
+{#each stickyPopups as popup (popup.id)}
+  <StickyNote
+    id={popup.id}
+    guid={popup.guid}
+    left={popup.left}
+    top={popup.top}
+    color={popup.color ?? 'yellow'}
+    zIndex={STICKY_Z_BASE + popup.zIndex}
+  />
+{/each}
+
+{#if isAppWindowed}
+  {#each editorPopups as popup (popup.id)}
+    <NotePopupWindow
+      id={popup.id}
+      guid={popup.guid}
+      left={popup.left}
+      top={popup.top}
+      width={popup.width}
+      height={popup.height}
+      zIndex={popup.zIndex}
+    />
+  {/each}
+{/if}
 
 <svelte:window onresize={handleViewportResize} />
 

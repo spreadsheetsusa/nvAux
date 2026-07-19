@@ -1,10 +1,17 @@
-import { clamp, clampFrameRect, FRAME_EDGE_MARGIN } from './clampFrame';
+import { clampFrameRect, FRAME_EDGE_MARGIN } from './clampFrame';
+import {
+  FRAME_MOVE_THRESHOLD,
+  computeClampedMove,
+  computeCornerResize,
+  cornerFromTarget,
+  createCornerHandles,
+  cursorForCorner,
+} from './frameResize';
 
-const MOVE_THRESHOLD = 2;
+const MOVE_THRESHOLD = FRAME_MOVE_THRESHOLD;
 const EDGE_MARGIN = FRAME_EDGE_MARGIN;
 const MIN_WIDTH = 360;
 const MIN_HEIGHT = 300;
-const CORNERS = ['nw', 'ne', 'sw', 'se'];
 
 /**
  * App Windowed floating-window move + corner resize.
@@ -56,14 +63,7 @@ export function windowFrame(node, params = {}) {
   let suppressClick = false;
 
   /** @type {HTMLDivElement[]} */
-  const cornerEls = CORNERS.map((corner) => {
-    const el = document.createElement('div');
-    el.className = `window-corner window-corner-${corner}`;
-    el.dataset.corner = corner;
-    el.setAttribute('aria-hidden', 'true');
-    node.appendChild(el);
-    return el;
-  });
+  const cornerEls = createCornerHandles(node);
 
   function syncCorners() {
     for (const el of cornerEls) {
@@ -245,16 +245,6 @@ export function windowFrame(node, params = {}) {
     return false;
   }
 
-  function cornerFromTarget(target) {
-    if (!(target instanceof Element)) return null;
-    const el = target.closest('.window-corner');
-    return el?.dataset?.corner ?? null;
-  }
-
-  function cursorForCorner(corner) {
-    return corner === 'nw' || corner === 'se' ? 'nwse-resize' : 'nesw-resize';
-  }
-
   function endInteraction(event) {
     if (pointerId != null && node.hasPointerCapture?.(pointerId)) {
       try {
@@ -322,67 +312,37 @@ export function windowFrame(node, params = {}) {
   }
 
   function applyResize(dx, dy) {
-    let nextLeft = startLeft;
-    let nextTop = startTop;
-    let nextW = startWidth;
-    let nextH = startHeight;
-    const corner = resizeCorner;
-
-    if (corner === 'se') {
-      nextW = startWidth + dx;
-      nextH = startHeight + dy;
-    } else if (corner === 'sw') {
-      nextW = startWidth - dx;
-      nextH = startHeight + dy;
-      nextLeft = startLeft + dx;
-    } else if (corner === 'ne') {
-      nextW = startWidth + dx;
-      nextH = startHeight - dy;
-      nextTop = startTop + dy;
-    } else if (corner === 'nw') {
-      nextW = startWidth - dx;
-      nextH = startHeight - dy;
-      nextLeft = startLeft + dx;
-      nextTop = startTop + dy;
-    }
-
-    const maxW = Math.max(MIN_WIDTH, window.innerWidth - EDGE_MARGIN);
-    const maxH = Math.max(MIN_HEIGHT, window.innerHeight - EDGE_MARGIN);
-    nextW = Math.round(clamp(nextW, MIN_WIDTH, maxW));
-    nextH = Math.round(clamp(nextH, MIN_HEIGHT, maxH));
-
-    // Keep the opposite corner anchored after size clamping (Photoshop-style).
-    if (corner === 'sw' || corner === 'nw') {
-      nextLeft = startLeft + (startWidth - nextW);
-    }
-    if (corner === 'ne' || corner === 'nw') {
-      nextTop = startTop + (startHeight - nextH);
-    }
-
-    // Keep a useful portion on-screen.
-    nextLeft = clamp(nextLeft, EDGE_MARGIN - nextW, window.innerWidth - EDGE_MARGIN);
-    nextTop = clamp(nextTop, EDGE_MARGIN - nextH, window.innerHeight - EDGE_MARGIN);
-
-    left = nextLeft;
-    top = nextTop;
-    width = nextW;
-    height = nextH;
+    const next = computeCornerResize({
+      corner: resizeCorner,
+      dx,
+      dy,
+      startLeft,
+      startTop,
+      startWidth,
+      startHeight,
+      minWidth: MIN_WIDTH,
+      minHeight: MIN_HEIGHT,
+      edge: EDGE_MARGIN,
+    });
+    left = next.left;
+    top = next.top;
+    width = next.width;
+    height = next.height;
     applyFrame();
   }
 
   function applyMove(dx, dy) {
-    const nextLeft = clamp(
-      startLeft + dx,
-      EDGE_MARGIN - width,
-      window.innerWidth - EDGE_MARGIN
-    );
-    const nextTop = clamp(
-      startTop + dy,
-      EDGE_MARGIN - height,
-      window.innerHeight - EDGE_MARGIN
-    );
-    left = nextLeft;
-    top = nextTop;
+    const next = computeClampedMove({
+      dx,
+      dy,
+      startLeft,
+      startTop,
+      width,
+      height,
+      edge: EDGE_MARGIN,
+    });
+    left = next.left;
+    top = next.top;
     applyFrame();
   }
 

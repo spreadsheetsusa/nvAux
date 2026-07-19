@@ -14,8 +14,8 @@
     openNotePopup,
     invalidateWikiNoteNames,
     noteMatchesQuery,
-  } from './store';
-  import { isNoteLocked } from './noteTypes/parseNoteMeta';
+  } from '$lib/store';
+  import { isNoteLocked } from '$lib/noteTypes/parseNoteMeta';
   import FileListItemContextMenu from './FileListItemContextMenu.svelte';
 
   const BODY_PREVIEW_LEN = 100;
@@ -198,6 +198,9 @@
       }
 
       cancelRename();
+    } catch (err) {
+      console.error('Failed to rename note:', err);
+      cancelRename();
     } finally {
       renameSubmitting = false;
     }
@@ -209,31 +212,89 @@
       event.currentTarget.blur();
     } else if (event.key === 'Escape') {
       event.preventDefault();
+      event.stopPropagation();
       cancelRename();
     }
   }
+
+  function focusOmniCaretEnd() {
+    const input = document.getElementById('omni-input');
+    if (!(input instanceof HTMLInputElement)) return;
+    input.dataset.focusCaretEnd = '1';
+    input.focus();
+    const len = input.value.length;
+    input.setSelectionRange(len, len);
+  }
+
+  function focusNoteList() {
+    document.getElementById('noteList')?.focus();
+  }
+
+  /** @param {KeyboardEvent} event */
+  function handleNoteListKeydown(event) {
+    if (renamingGuid) return;
+    const target = event.target;
+    if (
+      target instanceof HTMLElement &&
+      target.closest('input, button, textarea, [contenteditable="true"]')
+    ) {
+      return;
+    }
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    if (notes.length === 0) return;
+
+    event.preventDefault();
+
+    const currentIndex = selectedGuid
+      ? notes.findIndex((n) => n.guid === selectedGuid)
+      : -1;
+
+    if (event.key === 'ArrowDown') {
+      const nextIndex =
+        currentIndex < 0 ? 0 : Math.min(currentIndex + 1, notes.length - 1);
+      if (nextIndex !== currentIndex) {
+        handleSelectNote(notes[nextIndex]);
+      }
+      return;
+    }
+
+    // ArrowUp — leave list for Omnibar when already on (or above) the first item
+    if (currentIndex <= 0) {
+      focusOmniCaretEnd();
+      return;
+    }
+    handleSelectNote(notes[currentIndex - 1]);
+  }
 </script>
 
-<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <ul
   id="noteList"
   class="thin-scrollbar flex-shrink-0 border-box"
   class:is-collapsed={$noteListHeight <= 0}
+  role="listbox"
+  aria-label="Notes"
+  tabindex="0"
   onmousedown={() => (isMouseDown = true)}
   onmouseup={() => (isMouseDown = false)}
+  onkeydown={handleNoteListKeydown}
   style="height: {$noteListHeight}px;"
 >
   {#each notes as note (note.guid)}
     <!-- svelte-ignore a11y_mouse_events_have_key_events -->
     <li
       data-guid={note.guid}
+      role="option"
+      aria-selected={selectedGuid === note.guid}
       class:selected={selectedGuid === note.guid}
       onclick={() => {
         if (renamingGuid === note.guid) return;
         handleSelectNote(note);
+        focusNoteList();
       }}
-      onkeydown={() => {
+      onkeydown={(e) => {
         if (renamingGuid === note.guid) return;
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
         handleSelectNote(note);
       }}
       onmouseover={() => handleSelectNoteMouseOver(note)}
@@ -317,6 +378,9 @@
     overflow-x: hidden;
     background-color: var(--app-omni-background);
     border-radius: 8px;
+  }
+  ul:focus {
+    outline: none;
   }
   ul.is-collapsed {
     margin: 0;

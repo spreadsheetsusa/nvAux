@@ -1,0 +1,125 @@
+.settings-input {
+  background: #1a1c1e;
+  color: #e5e7eb;
+  border: 1px solid #2b2d30;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  outline: none;
+  color-scheme: dark;
+}
+
+.settings-input::placeholder {
+  color: #6b7280;
+}
+
+.settings-input:focus {
+  border-color: #404856;
+}
+
+.settings-input[type='date'] {
+  color-scheme: dark;
+}
+
+.settings-input[type='date']::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+  cursor: pointer;
+}
+
+.settings-color {
+  width: 40px;
+  height: 32px;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+
+.accent-color-row {
+  gap: 12px;
+}
+
+.accent-presets {
+  gap: 8px;
+}
+
+.accent-preset {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.accent-preset:hover {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+}
+
+.accent-preset-selected {
+  border-color: #e5e7eb;
+  box-shadow: 0 0 0 1px #1a1c1e;
+}
+
+.accent-preset:focus-visible {
+  outline: 2px solid #404856;
+  outline-offset: 2px;
+}
+
+.settings-range {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  width: 100%;
+  height: 6px;
+  background: #2b2d30;
+  border-radius: 3px;
+  outline: none;
+  accent-color: var(--app-accent);
+  cursor: pointer;
+}
+
+.settings-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--app-accent);
+  border: none;
+  cursor: pointer;
+}
+
+.settings-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--app-accent);
+  border: none;
+  cursor: pointer;
+}
+
+.settings-range::-moz-range-track {
+  height: 6px;
+  background: #2b2d30;
+  border-radius: 3px;
+}
+
+.settings-range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 2px #1a1c1e, 0 0 0 4px #404856;
+}
+
+.settings-range:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 2px #1a1c1e, 0 0 0 4px #404856;
+}
+
+.lock-setup-notice {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--app-accent) 55%, #2b2d30);
+  background: color-mix(in srgb, var(--app-accent) 18%, #1a1c1e);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 13px;
+  line-height: 1.4;
+}

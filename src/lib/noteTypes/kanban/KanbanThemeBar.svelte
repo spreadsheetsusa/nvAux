@@ -1,6 +1,6 @@
 <script>
   // @ts-nocheck
-  import { ACCENT_COLOR_PRESETS, DEFAULT_ACCENT_COLOR } from '../../store';
+  import { ACCENT_COLOR_PRESETS, DEFAULT_ACCENT_COLOR } from '$lib/accentPresets';
 
   let {
     theme = { density: 'comfortable' },

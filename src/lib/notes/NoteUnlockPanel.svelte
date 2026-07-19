@@ -1,5 +1,5 @@
 <script>
-  import { verifyLockPin, unlockNoteSession, touchNoteActivity } from './store';
+  import { verifyLockPin, unlockNoteSession, touchNoteActivity } from '$lib/store';
 
   /** @type {{ guid: string, onUnlocked?: () => void, variant?: 'default' | 'sticky' }} */
   let { guid, onUnlocked = undefined, variant = 'default' } = $props();

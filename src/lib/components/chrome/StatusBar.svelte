@@ -1,5 +1,5 @@
 <script>
-  import { fullScreen, windowed, isMobile } from './store';
+  import { fullScreen, windowed, isMobile } from '$lib/store';
 
   let isAppFullscreen = $derived($fullScreen && (!$windowed || $isMobile));
 </script>

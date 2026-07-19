@@ -1,13 +1,6 @@
 <script>
   // @ts-nocheck
 
-  import { Marked } from 'marked';
-  import { markedHighlight } from 'marked-highlight';
-  import hljs from 'highlight.js/lib/core';
-  import plaintext from 'highlight.js/lib/languages/plaintext';
-  import markdown from 'highlight.js/lib/languages/markdown';
-  import javascript from 'highlight.js/lib/languages/javascript';
-  import typescript from 'highlight.js/lib/languages/typescript';
   import 'highlight.js/styles/github.css';
 
   import {
@@ -21,35 +14,20 @@
     STICKY_NOTE_H,
     unlockedNoteActivity,
     touchNoteActivity,
-  } from './store';
-  import { popupFrame } from '../utils/popupFrame';
+  } from '$lib/store';
+  import { popupFrame } from '../../utils/popupFrame';
   import {
     parseNoteMeta,
     STICKY_COLORS,
     normalizeStickyColor,
     isNoteLocked,
-  } from './noteTypes/parseNoteMeta';
+  } from '$lib/noteTypes/parseNoteMeta';
   import {
     toWikiPreviewMarkdown,
     parseWikiHref,
-  } from '../utils/wikiLinks';
-  import NoteUnlockPanel from './NoteUnlockPanel.svelte';
-
-  hljs.registerLanguage('plaintext', plaintext);
-  hljs.registerLanguage('markdown', markdown);
-  hljs.registerLanguage('javascript', javascript);
-  hljs.registerLanguage('typescript', typescript);
-
-  const marked = new Marked(
-    markedHighlight({
-      emptyLangClass: 'hljs',
-      langPrefix: 'hljs language-',
-      highlight(code, lang) {
-        const language = lang && hljs.getLanguage(lang) ? lang : 'plaintext';
-        return hljs.highlight(code, { language }).value;
-      },
-    })
-  );
+  } from '../../utils/wikiLinks';
+  import NoteUnlockPanel from '$lib/notes/NoteUnlockPanel.svelte';
+  import { renderMarkdown } from '$lib/notes/markdownPreview';
 
   let {
     id,
@@ -78,7 +56,7 @@
   $effect(() => {
     const content = bodyContent || '';
     const timeoutId = window.setTimeout(() => {
-      previewHtml = marked.parse(toWikiPreviewMarkdown(content));
+      previewHtml = renderMarkdown(toWikiPreviewMarkdown(content));
     }, 120);
     return () => window.clearTimeout(timeoutId);
   });
@@ -194,7 +172,7 @@
       type="button"
       class="sticky-close bg-transparent flex-shrink-0"
       aria-label="Hide sticky"
-      title="Hide until next Windowed session"
+      title="Hide for this session"
       onclick={handleClose}
     >
       <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>

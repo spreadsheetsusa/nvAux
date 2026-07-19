@@ -189,11 +189,17 @@ export function extractMediaLinks(text) {
 }
 
 /**
- * @param {string | null | undefined} text
- * @returns {MediaLink | null}
+ * Infer media provider from a URL (shared with media session track hydration).
+ * @param {string | null | undefined} url
+ * @returns {'soundcloud' | 'youtube' | 'image' | 'video'}
  */
-export function firstMediaLink(text) {
-  return extractMediaLinks(text)[0] ?? null;
+export function mediaProviderFromUrl(url) {
+  const u = url || '';
+  if (SOUNDCLOUD_HOST_RE.test(u)) return 'soundcloud';
+  if (YOUTUBE_HOST_RE.test(u) || isYouTubeUrl(u)) return 'youtube';
+  const file = fileProviderForUrl(u);
+  if (file) return file;
+  return 'soundcloud';
 }
 
 /**
@@ -203,8 +209,8 @@ export function firstMediaLink(text) {
  */
 export function hasQueueableMedia(text) {
   const t = text || '';
-  if (/soundcloud\.com|snd\.sc/i.test(t)) return true;
-  if (/youtube\.com|youtu\.be/i.test(t)) return true;
+  if (SOUNDCLOUD_HOST_RE.test(t)) return true;
+  if (YOUTUBE_HOST_RE.test(t)) return true;
   return /https?:\/\/[^\s<>"'`)\]]+\.(?:png|jpe?g|gif|webp|avif|svg|mp4|webm|ogg|mov)(?:\?|[^\w]|$)/i.test(
     t
   );

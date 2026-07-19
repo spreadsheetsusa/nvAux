@@ -1,6 +1,6 @@
 {
   "name": "nvaux",
-  "description": "note-taking app for creative profressionals",
+  "description": "note-taking app for creative professionals",
   "private": true,
   "version": "0.1.5",
   "type": "module",
@@ -16,21 +16,20 @@
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.2.0",
-    "@types/uuid": "^11.0.0",
-    "date-fns": "^4.4.0",
-    "file-saver": "^2.0.5",
-    "jszip": "^3.10.1",
-    "rxdb": "^17.4.0",
-    "rxjs": "^7.8.2",
-    "svelte": "^5.56.5",
-    "uuid": "^14.0.1",
     "vite": "^8.1.5",
     "vite-plugin-singlefile": "^2.3.3"
   },
   "dependencies": {
     "d3-force": "^3.0.0",
+    "date-fns": "^4.4.0",
+    "file-saver": "^2.0.5",
     "highlight.js": "^11.11.1",
+    "jszip": "^3.10.1",
     "marked": "^18.0.6",
-    "marked-highlight": "^2.2.4"
+    "marked-highlight": "^2.2.4",
+    "rxdb": "^17.4.0",
+    "rxjs": "^7.8.2",
+    "svelte": "^5.56.5",
+    "uuid": "^14.0.1"
   }
 }

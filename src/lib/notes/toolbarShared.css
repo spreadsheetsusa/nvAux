@@ -1,0 +1,66 @@
+.toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 0;
+  padding: 2px 8px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: #606060;
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.toolbar-btn.icon-btn {
+  padding: 2px 6px;
+}
+
+.toolbar-btn:hover {
+  color: #8a8a8a;
+  border-color: #404040;
+}
+
+.toolbar-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.toolbar-btn.active {
+  color: rgba(255, 255, 255, 0.85);
+  border-color: #525962;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.toolbar-btn.primary {
+  color: #fff;
+  border-color: var(--app-accent);
+}
+
+.toolbar-btn.primary:hover {
+  color: #fff;
+  border-color: var(--app-accent);
+  background: color-mix(in srgb, var(--app-accent) 12%, transparent);
+}
+
+.toolbar-btn.accent {
+  color: #fff;
+  border-color: var(--app-accent);
+  background: var(--app-accent);
+}
+
+.toolbar-btn.accent:hover {
+  color: #fff;
+  border-color: var(--app-accent);
+  background: color-mix(in srgb, var(--app-accent) 88%, #fff);
+}
+
+.toolbar-btn .calendar-time-icon,
+.toolbar-btn .sticky-icon,
+.toolbar-btn .lock-icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  display: block;
+}

@@ -1,7 +1,11 @@
 import { get, writable } from 'svelte/store';
 import { v4 as uuidv4 } from 'uuid';
 
-import { extractMediaLinks, hasQueueableMedia } from '../utils/extractMediaLinks';
+import {
+  extractMediaLinks,
+  hasQueueableMedia,
+  mediaProviderFromUrl,
+} from '../../utils/extractMediaLinks';
 
 /**
  * @typedef {{
@@ -30,37 +34,13 @@ export const mediaPlayRequest = writable(0);
 export { hasQueueableMedia };
 
 /**
- * Cheap presence check for toolbar visibility (avoids full URL extraction on each keystroke).
- * @param {string | null | undefined} text
- * @returns {boolean}
- */
-export function hasSoundCloudLinks(text) {
-  return /soundcloud\.com|snd\.sc/i.test(text || '');
-}
-
-/**
- * @param {string | null | undefined} text
- * @returns {string[]}
- */
-export function soundcloudUrlsFrom(text) {
-  return extractMediaLinks(text)
-    .filter((l) => l.provider === 'soundcloud')
-    .map((l) => l.url);
-}
-
-/**
  * Infer provider for tracks that may predate the provider field.
  * @param {Pick<MediaTrack, 'url' | 'provider'> | null | undefined} track
  * @returns {'soundcloud' | 'youtube' | 'image' | 'video'}
  */
 export function mediaTrackProvider(track) {
   if (track?.provider) return track.provider;
-  const url = track?.url || '';
-  if (/soundcloud\.com|snd\.sc/i.test(url)) return 'soundcloud';
-  if (/youtube\.com|youtu\.be/i.test(url)) return 'youtube';
-  if (/\.(?:mp4|webm|ogg|mov)(?:\?|$)/i.test(url)) return 'video';
-  if (/\.(?:png|jpe?g|gif|webp|avif|svg)(?:\?|$)/i.test(url)) return 'image';
-  return 'soundcloud';
+  return mediaProviderFromUrl(track?.url);
 }
 
 /**

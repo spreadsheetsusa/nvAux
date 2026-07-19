@@ -1,6 +1,6 @@
 <script>
   import MarketingSection from './MarketingSection.svelte';
-  import { fullScreen, windowed } from '../../store';
+  import { fullScreen, windowed } from '$lib/store';
 
   function enterAppMode() {
     $fullScreen = true;

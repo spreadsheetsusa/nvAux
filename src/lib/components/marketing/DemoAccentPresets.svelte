@@ -1,5 +1,6 @@
 <script>
-  import { accentColor, ACCENT_COLOR_PRESETS } from '../../store';
+  import { accentColor } from '$lib/store';
+  import { ACCENT_COLOR_PRESETS } from '$lib/accentPresets';
 </script>
 
 <div class="demo-accent-presets" role="group" aria-label="Accent color presets">
@@ -23,12 +24,12 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 12px;
+    gap: 10px;
     margin: 1.15rem 0 0;
   }
   .demo-accent-swatch {
-    width: 26px;
-    height: 26px;
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
     border: 2px solid transparent;
     padding: 0;

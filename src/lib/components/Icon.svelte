@@ -9,7 +9,6 @@
   import Sidebar from './icons/Sidebar.svelte';
   import Sticky from './icons/Sticky.svelte';
   import Xcircle from './icons/Xcircle.svelte';
-  import ZoomFit from './icons/ZoomFit.svelte';
 
   let { name, ...rest } = $props();
 
@@ -24,7 +23,6 @@
     Sidebar,
     Sticky,
     Xcircle,
-    ZoomFit,
   };
 
   const Cmp = $derived(icons[name]);

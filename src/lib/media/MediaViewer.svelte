@@ -3,8 +3,8 @@
   import { untrack } from 'svelte';
   import { slide } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
-  import ResizeHandle from '../ResizeHandle.svelte';
-  import { mediaViewerHeight } from '../store';
+  import ResizeHandle from '$lib/components/chrome/ResizeHandle.svelte';
+  import { mediaViewerHeight } from '$lib/store';
   import { youtubeIdFromUrl } from '../../utils/extractMediaLinks';
 
   const VIEWER_SLIDE = { duration: 220, easing: cubicOut };

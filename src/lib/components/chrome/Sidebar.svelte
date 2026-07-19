@@ -2,9 +2,9 @@
   import { onMount } from 'svelte';
   import { slide } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
-  import { sidebarOpen, sidebarWidth, isMobile, graphViewOpen } from './store';
-  import LifeCalendar from './LifeCalendar.svelte';
-  import NoteGraphView from './NoteGraphView.svelte';
+  import { sidebarOpen, sidebarWidth, isMobile, graphViewOpen } from '$lib/store';
+  import LifeCalendar from '$lib/life/LifeCalendar.svelte';
+  import NoteGraphView from '$lib/graph/NoteGraphView.svelte';
   import ResizeHandle from './ResizeHandle.svelte';
 
   const GRAPH_SLIDE = { duration: 250, easing: cubicOut };

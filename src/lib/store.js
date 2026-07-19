@@ -1,19 +1,7 @@
 import { writable, get } from 'svelte/store';
 import { v4 as uuidv4 } from 'uuid';
 
-import { addRxPlugin, createRxDatabase } from 'rxdb';
-import { getRxStorageDexie } from 'rxdb/plugins/storage-dexie';
-import { wrappedKeyEncryptionCryptoJsStorage } from 'rxdb/plugins/encryption-crypto-js';
-
-import { schema } from './schema';
-import {
-  getDbPasswordFingerprint,
-  getOrCreateDbPassword,
-  legacyIndexedDbExists,
-  replaceDbPassword,
-} from './dbEncryption';
 import { applyAccentGradient } from '../utils/accentGradient';
-import { defaultKanbanBody } from './noteTypes/kanban/kanbanModel';
 import {
   applyLockedMeta,
   applyStickyMeta,
@@ -24,35 +12,66 @@ import {
 } from './noteTypes/parseNoteMeta';
 import { isRichNoteType, resolveNoteType } from './noteTypes/resolveNoteType';
 import { clampFramePosition, clampFrameRect } from '../utils/clampFrame';
+import {
+  ACCENT_COLOR_PRESETS,
+  DEFAULT_ACCENT_COLOR,
+  normalizeAccentColor,
+} from './accentPresets';
+import {
+  db,
+  SETTINGS_GUID,
+  resetDatabase,
+  regenerateEncryptionKey,
+  hardRefreshApp,
+  getDbPasswordFingerprint,
+  invalidateWikiNoteNames,
+  getWikiNoteNames,
+} from './db';
+
+export {
+  db,
+  SETTINGS_GUID,
+  resetDatabase,
+  regenerateEncryptionKey,
+  hardRefreshApp,
+  getDbPasswordFingerprint,
+  invalidateWikiNoteNames,
+  getWikiNoteNames,
+  ACCENT_COLOR_PRESETS,
+  DEFAULT_ACCENT_COLOR,
+};
 
 /**
  * State that persists to localStorage =========================================
  */
 
-const storedNoteListHeight = localStorage.getItem('noteListHeight') || 220;
-const storedSidebarWidth = localStorage.getItem('sidebarWidth') || 443;
-const storedMediaViewerHeight = (() => {
-  const raw = Number(localStorage.getItem('mediaViewerHeight'));
-  return Number.isFinite(raw) ? Math.min(480, Math.max(120, raw)) : 220;
-})();
+/** @param {string} key @param {number} fallback @param {number} min @param {number} max */
+function readStoredNumber(key, fallback, min, max) {
+  const raw = Number(localStorage.getItem(key));
+  if (!Number.isFinite(raw)) return fallback;
+  return Math.min(max, Math.max(min, raw));
+}
+
+const storedNoteListHeight = readStoredNumber('noteListHeight', 220, 0, 2000);
+const storedSidebarWidth = readStoredNumber('sidebarWidth', 443, 200, 1200);
+const storedMediaViewerHeight = readStoredNumber('mediaViewerHeight', 220, 120, 480);
 
 /** @param {string} key @param {boolean} fallback */
 function readStoredBool(key, fallback) {
   const raw = localStorage.getItem(key);
   if (raw === null) return fallback;
   try {
-    return !!JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    // Only real booleans count — reject truthy junk so prefs can't sneak on.
+    return typeof parsed === 'boolean' ? parsed : fallback;
   } catch {
     return fallback;
   }
 }
 
-const storedGraphViewHeight = localStorage.getItem('graphViewHeight') || 260;
+const storedGraphViewHeight = readStoredNumber('graphViewHeight', 260, 120, 900);
 const storedGraphViewOpen = readStoredBool('graphViewOpen', false);
-const storedGraphViewZoom = (() => {
-  const raw = Number(localStorage.getItem('graphViewZoom'));
-  return Number.isFinite(raw) ? Math.min(8, Math.max(0.35, raw)) : 1;
-})();
+const storedGraphViewZoom = readStoredNumber('graphViewZoom', 1, 0.35, 8);
 
 const storedFullScreen = readStoredBool('fullScreen', false);
 /** Windowed app mode; migrated from inverted legacy `maximumFullScreen`. */
@@ -75,7 +94,17 @@ const mobileMq =
   typeof window !== 'undefined'
     ? window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`)
     : null;
-const storedShowClock = JSON.parse(localStorage.getItem('showClock')) || "true";
+/**
+ * Clock and status bar off by default. Both briefly shipped/persisted as on;
+ * clear once so Settings checkboxes stay unchecked unless the user opts in.
+ */
+if (localStorage.getItem('chromePrefsDefault') !== 'off') {
+  localStorage.removeItem('showClock');
+  localStorage.removeItem('showStatusBar');
+  localStorage.setItem('chromePrefsDefault', 'off');
+}
+localStorage.removeItem('showStatusBarDefault');
+const storedShowClock = readStoredBool('showClock', false);
 const storedShowStatusBar = readStoredBool('showStatusBar', false);
 const storedSidebarOpen = readStoredBool('sidebarOpen', false);
 /** Preview vs Edit prefs by kind (plain markdown vs rich body types). Old `markdownPreview` key ignored. */
@@ -115,28 +144,13 @@ const storedLifeCalendarStat = LIFE_CALENDAR_STATS.includes(localStorage.getItem
   ? localStorage.getItem('lifeCalendarStat')
   : 'title';
 
-export const DEFAULT_ACCENT_COLOR = '#ed0178';
-export const ACCENT_COLOR_PRESETS = [
-  '#ed0178',
-  '#2252a0',
-  '#0f766e',
-  '#c2410c',
-  '#7c3aed',
-];
-
-/** @param {unknown} raw */
-function normalizeAccentColor(raw) {
-  if (typeof raw !== 'string') return DEFAULT_ACCENT_COLOR;
-  const v = raw.trim();
-  if (/^#[0-9a-fA-F]{6}$/.test(v)) return v.toLowerCase();
-  return DEFAULT_ACCENT_COLOR;
-}
-
 const storedAccentColor = normalizeAccentColor(localStorage.getItem('accentColor'));
 
-/** Fixed sticky post-it size (App Windowed). */
+/** Fixed sticky post-it size (viewport-fixed floaters). */
 export const STICKY_NOTE_W = 240;
 export const STICKY_NOTE_H = 260;
+/** Keep stickies above app chrome (mobile drawer ~50) while preserving relative order. */
+export const STICKY_Z_BASE = 200;
 
 /** @param {unknown} raw */
 function parseAppWindowFrame(raw) {
@@ -192,275 +206,11 @@ const storedStickyNoteFrames = parseStickyNoteFrames(
 );
 
 /**
- * RxDB ************************************************************************
- */
-
-/** Encrypted-at-rest DB (RxDB encryption-crypto-js + Dexie). */
-const DB_NAME = 'nvauxdb18';
-/** Pre-encryption DB — one-time migrated into nvauxdb18 when present. */
-const LEGACY_DB_NAME = 'nvauxdb17';
-
-/** Seeded Settings note — also the target for preference `updatedAt` bumps. */
-export const SETTINGS_GUID = '00000000-0000-0000-0000-000000000000';
-
-const WELCOME_GUID = '11111111-1111-1111-1111-111111111111';
-const TECHNO_LEAGUE_GUID = '22222222-2222-2222-2222-222222222222';
-const KANBAN_DEMO_GUID = '33333333-3333-3333-3333-333333333333';
-const VIDEO_DEMO_GUID = '44444444-4444-4444-4444-444444444444';
-
-let dbPromise;
-
-/** @type {Array<{ guid: string, name: string, body: string, createdAt: number, updatedAt: number }> | null} */
-let pendingRestoreNotes = null;
-
-/** Plaintext schema for reading legacy unencrypted DBs (no `encrypted` fields). */
-function plaintextNoteSchema() {
-  const { encrypted: _enc, ...rest } = schema;
-  return rest;
-}
-
-/**
- * @param {import('rxdb').RxDatabase} encryptedDb
- */
-async function migrateFromLegacyIfNeeded(encryptedDb) {
-  const existing = await encryptedDb.notes.find().exec();
-  if (existing.length > 0) return;
-
-  const hasLegacy = await legacyIndexedDbExists(LEGACY_DB_NAME);
-  // false = confidently absent; null = unknown (try open); true = present
-  if (hasLegacy === false) return;
-
-  let legacy;
-  try {
-    legacy = await createRxDatabase({
-      name: LEGACY_DB_NAME,
-      storage: getRxStorageDexie(),
-      ignoreDuplicate: true,
-    });
-    await legacy.addCollections({
-      notes: { schema: plaintextNoteSchema() },
-    });
-  } catch {
-    return;
-  }
-
-  try {
-    const docs = await legacy.notes.find().exec();
-    for (const doc of docs) {
-      const j = doc.toJSON();
-      await encryptedDb.notes.insert({
-        guid: j.guid,
-        name: j.name,
-        body: j.body ?? '',
-        createdAt: j.createdAt,
-        updatedAt: j.updatedAt,
-      });
-    }
-  } finally {
-    try {
-      await legacy.remove();
-    } catch {
-      /* ignore */
-    }
-  }
-}
-
-/**
- * @param {import('rxdb').RxDatabase} database
- */
-async function seedDefaultNotes(database) {
-  const welcomeNote = await database.notes.findOne(WELCOME_GUID).exec();
-  if (!welcomeNote) {
-    await database.notes.insert({
-      guid: WELCOME_GUID,
-      name: '🚀 Welcome to nvAux!',
-      body: `Welcome and thank you for using nvAux!
-
-This is a web-based note-taking app inspired by nvALT where searching and creating notes is one in the same action. A few things to keep in-mind:
-
-* All your notes are stored within your browser, locally. Note titles and bodies are encrypted at rest in IndexedDB (the decryption key stays on this device so the app opens without a password).
-* 'Add to Home Screen' on iOS Safari for a native app-like experience.
-* Notes can be typed: open **📋 Sample Kanban** for a board (Preview = board, Edit = source). SoundCloud, YouTube, and image/video links queue into the media player — try **🎧 The Gentleman's Techno League - EP1** and **🎥 Video Link Example**.
-
-If you are interested in the development of nvAux the project is open-source and available on GitHub at https://github.com/matterofabstract/nvaux
-
-You can download your notes at any time by clicking the 'Download Notes' button in the nvAux settings screen.
-
-Don't forget to follow the project on 𝕏 at @nvAuxApp and let us know what you think!
-  `,
-      createdAt: new Date().getTime(),
-      updatedAt: new Date().getTime(),
-    });
-  }
-
-  const settingsNote = await database.notes.findOne(SETTINGS_GUID).exec();
-  if (!settingsNote) {
-    await database.notes.insert({
-      guid: SETTINGS_GUID,
-      name: '⚙️ nvAux Settings',
-      body: 'Adjust Your nvAux Preferences',
-      createdAt: new Date().getTime(),
-      updatedAt: new Date().getTime(),
-    });
-  }
-
-  const technoLeagueNote = await database.notes.findOne(TECHNO_LEAGUE_GUID).exec();
-  if (!technoLeagueNote) {
-    await database.notes.insert({
-      guid: TECHNO_LEAGUE_GUID,
-      name: "🎧 The Gentleman's Techno League - EP1",
-      body: `This note demonstrates soundcloud integration. Any notes containing soundcloud links will be detected and you'll see player/playlist buttons just above this paragraph. The media player is independant of any selected note, so feel free to queue up tracks across many notes and keep hustling.
-
-# Episode 1
-
-1. [Paluma Sound - Real Flow](https://soundcloud.com/chezcritique/paluma-sound-real-flow?in=frankneuro/sets/gentlemens-techno-league/)
-2. [Ross From Friends - Talk To Me, You'll Understand](https://soundcloud.com/rossfromfriends/talk-to-me-youll-understand?in=frankneuro/sets/gentlemens-techno-league/)
-3. [octn - on2 4u](https://soundcloud.com/octn/on2-4u?in=frankneuro/sets/gentlemens-techno-league/)
-4. [Forcesupreme - Mojito](https://soundcloud.com/forcesupreme-music/forcesupreme-mojito?in=frankneuro/sets/gentlemens-techno-league/)
-
----
-
-The current implementation is basic. There are future plans to support the full soundcloud api with ability to download and store media automatically.
-`,
-      createdAt: new Date().getTime(),
-      updatedAt: new Date().getTime(),
-    });
-  }
-
-  const kanbanDemoNote = await database.notes.findOne(KANBAN_DEMO_GUID).exec();
-  if (!kanbanDemoNote) {
-    await database.notes.insert({
-      guid: KANBAN_DEMO_GUID,
-      name: '📋 Sample Kanban',
-      body: defaultKanbanBody(),
-      createdAt: new Date().getTime(),
-      updatedAt: new Date().getTime(),
-    });
-  }
-
-  const videoDemoNote = await database.notes.findOne(VIDEO_DEMO_GUID).exec();
-  if (!videoDemoNote) {
-    await database.notes.insert({
-      guid: VIDEO_DEMO_GUID,
-      name: '🎥 Video Link Example',
-      body: `Notes that contains links to video media are playable in nvAux. Click Play Now just above.
-
-https://www.youtube.com/watch?v=Hm3JodBR-vs
-`,
-      createdAt: new Date().getTime(),
-      updatedAt: new Date().getTime(),
-    });
-  }
-}
-
-const _create = async () => {
-  const isDev = import.meta.env.DEV;
-
-  if (isDev) {
-    const { RxDBDevModePlugin } = await import('rxdb/plugins/dev-mode');
-    addRxPlugin(RxDBDevModePlugin);
-  }
-
-  const password = getOrCreateDbPassword();
-  const encryptedStorage = wrappedKeyEncryptionCryptoJsStorage({
-    storage: getRxStorageDexie(),
-  });
-  const storage = isDev
-    ? (await import('rxdb/plugins/validate-ajv')).wrappedValidateAjvStorage({
-        storage: encryptedStorage,
-      })
-    : encryptedStorage;
-
-  const database = await createRxDatabase({
-    name: DB_NAME,
-    storage,
-    password,
-    ignoreDuplicate: isDev,
-  });
-
-  await database.addCollections({ notes: { schema } });
-
-  if (pendingRestoreNotes) {
-    const notes = pendingRestoreNotes;
-    pendingRestoreNotes = null;
-    for (const note of notes) {
-      await database.notes.insert(note);
-    }
-  } else {
-    await migrateFromLegacyIfNeeded(database);
-  }
-
-  await seedDefaultNotes(database);
-
-  return database;
-};
-
-/** Single shared DB open — must assign the promise immediately to avoid concurrent creates. */
-export const db = () => {
-  if (!dbPromise) {
-    dbPromise = _create().catch((err) => {
-      dbPromise = undefined;
-      throw err;
-    });
-  }
-  return dbPromise;
-};
-
-/** Wipe IndexedDB + prefs so the next open re-seeds the default notes. */
-export async function resetDatabase() {
-  const database = await db();
-  await database.remove();
-  dbPromise = undefined;
-  localStorage.clear();
-  invalidateWikiNoteNames();
-}
-
-/**
- * Re-encrypt all notes under a new on-device key (RxDB passwords are immutable per DB).
- * @returns {Promise<string>} new key fingerprint
- */
-export async function regenerateEncryptionKey() {
-  const database = await db();
-  const docs = await database.notes.find().exec();
-  pendingRestoreNotes = docs.map((doc) => {
-    const j = doc.toJSON();
-    return {
-      guid: j.guid,
-      name: j.name,
-      body: j.body ?? '',
-      createdAt: j.createdAt,
-      updatedAt: j.updatedAt,
-    };
-  });
-  await database.remove();
-  dbPromise = undefined;
-  replaceDbPassword();
-  await db();
-  invalidateWikiNoteNames();
-  return getDbPasswordFingerprint();
-}
-
-export { getDbPasswordFingerprint };
-
-/** Unregister service workers and clear Cache Storage. Notes and prefs are kept. */
-export async function hardRefreshApp() {
-  if ('serviceWorker' in navigator) {
-    const regs = await navigator.serviceWorker.getRegistrations();
-    await Promise.all(regs.map((reg) => reg.unregister()));
-  }
-  if ('caches' in window) {
-    const keys = await caches.keys();
-    await Promise.all(keys.map((key) => caches.delete(key)));
-  }
-}
-
-/**
  * Svelte Writables ************************************************************
  */
 
 export const omniMode = writable('search');
 export const omniText = writable('');
-export const noteList = writable([]);
 export const noteListHeight = writable(Number(storedNoteListHeight));
 export const sidebarWidth = writable(Number(storedSidebarWidth));
 export const graphViewOpen = writable(storedGraphViewOpen);
@@ -570,7 +320,7 @@ export const mediaPlayerHeight = writable(0);
 export const mediaViewerHeight = writable(storedMediaViewerHeight);
 
 /**
- * Session floating note windows (App Windowed): resizable popups + fixed stickies.
+ * Session floating note windows: fixed stickies (all modes) + resizable popups (App Windowed).
  * @type {import('svelte/store').Writable<Array<{
  *   id: string,
  *   guid: string,
@@ -584,6 +334,9 @@ export const mediaViewerHeight = writable(storedMediaViewerHeight);
  * }>>}
  */
 export const notePopups = writable([]);
+
+/** Session-dismissed sticky guids (X hide); cleared on reload or when re-pinned. */
+const dismissedStickyGuids = new Set();
 
 /** Persisted main App Windowed geometry (null = use default). */
 export const appWindowFrame = writable(storedAppWindowFrame);
@@ -700,6 +453,7 @@ function defaultStickyPos(index) {
  */
 export function ensureStickyPopup(guid, opts = {}) {
   if (!guid) return;
+  dismissedStickyGuids.delete(guid);
   const color =
     normalizeStickyColor(opts.color ?? '') ??
     (opts.body != null ? getStickyColor(opts.body) : 'yellow');
@@ -831,8 +585,8 @@ export async function openNotePopup(guid) {
 }
 
 /**
- * Auto-surface every sticky markdown note in App Windowed.
- * Session-dismissed stickies stay hidden until the next Windowed enter.
+ * Auto-surface every sticky markdown note (all modes).
+ * Session-dismissed stickies (X) stay hidden until re-pinned or reload.
  */
 export async function syncStickyNotes() {
   const database = await db();
@@ -844,6 +598,9 @@ export async function syncStickyNotes() {
 
   const frames = get(stickyNoteFrames);
   const want = new Set(stickyDocs.map((d) => d.guid));
+  for (const guid of [...dismissedStickyGuids]) {
+    if (!want.has(guid)) dismissedStickyGuids.delete(guid);
+  }
 
   notePopups.update((list) => {
     // Drop sticky floaters for notes that are no longer sticky.
@@ -853,6 +610,7 @@ export async function syncStickyNotes() {
     let cascade = next.filter((p) => p.kind === 'sticky').length;
 
     for (const doc of stickyDocs) {
+      if (dismissedStickyGuids.has(doc.guid)) continue;
       const color = getStickyColor(doc.body);
       const existing = next.find((p) => p.guid === doc.guid);
       if (existing) {
@@ -968,16 +726,6 @@ export function touchNoteActivity(guid) {
   });
 }
 
-/**
- * True when the note body may be shown (not locked, or session-unlocked).
- * @param {string | null | undefined} guid
- * @param {string | null | undefined} body
- */
-export function isNoteContentAccessible(guid, body) {
-  if (!isNoteLocked(body)) return true;
-  return isNoteSessionUnlocked(guid);
-}
-
 // Auto-relock unlocked notes after inactivity (skipped when timeout is 0).
 if (typeof window !== 'undefined') {
   window.setInterval(() => {
@@ -998,7 +746,7 @@ if (typeof window !== 'undefined') {
 }
 
 /**
- * Toggle sticky frontmatter on a note and sync Windowed floaters.
+ * Toggle sticky frontmatter on a note and sync viewport floaters.
  * @param {any} noteDoc RxDB document
  * @param {boolean} sticky
  * @param {'yellow' | 'pink' | 'blue'} [color]
@@ -1025,15 +773,13 @@ export async function setNoteSticky(noteDoc, sticky, color) {
     bodyText.set(nextBody);
   }
 
-  const inWindowed = get(fullScreen) && get(windowed) && !get(isMobile);
   if (sticky) {
-    if (inWindowed) {
-      ensureStickyPopup(noteDoc.guid, {
-        body: nextBody,
-        color: getStickyColor(nextBody),
-      });
-    }
+    ensureStickyPopup(noteDoc.guid, {
+      body: nextBody,
+      color: getStickyColor(nextBody),
+    });
   } else {
+    dismissedStickyGuids.delete(noteDoc.guid);
     notePopups.update((list) =>
       list.filter((p) => !(p.guid === noteDoc.guid && p.kind === 'sticky'))
     );
@@ -1082,11 +828,23 @@ export async function setNoteLocked(noteDoc, locked) {
 /** @param {string} id */
 export function closeNotePopup(id) {
   if (!id) return;
-  notePopups.update((list) => list.filter((p) => p.id !== id));
+  notePopups.update((list) => {
+    const target = list.find((p) => p.id === id);
+    if (target?.kind === 'sticky') {
+      dismissedStickyGuids.add(target.guid);
+    }
+    return list.filter((p) => p.id !== id);
+  });
 }
 
+/** Close all floaters (stickies + editor popups). */
 export function closeAllNotePopups() {
   notePopups.set([]);
+}
+
+/** Close App Windowed editor popups only; leave stickies open. */
+export function closeAllEditorPopups() {
+  notePopups.update((list) => list.filter((p) => p.kind === 'sticky'));
 }
 
 /** Bring a note popup above the main window and all other popups. */
@@ -1214,31 +972,13 @@ export async function openNoteByName(name) {
   return note;
 }
 
-/** @type {string[] | null} */
-let wikiNoteNamesCache = null;
-
-/** Drop cached note titles (call after create / rename / delete). */
-export function invalidateWikiNoteNames() {
-  wikiNoteNamesCache = null;
-}
-
-/**
- * Note titles for wiki-link autocomplete. Cached until invalidated.
- * @returns {Promise<string[]>}
- */
-export async function getWikiNoteNames() {
-  if (wikiNoteNamesCache) return wikiNoteNamesCache;
-  const database = await db();
-  const docs = await database.notes.find().exec();
-  wikiNoteNamesCache = docs.map((n) => n.name).filter(Boolean);
-  return wikiNoteNamesCache;
-}
-
-omniText.subscribe(v => {
+omniText.subscribe((v) => {
   if (v === '') {
     omniMode.set('search');
-    selectedNote.set('')
-    // TODO: scroll to top of NoteList
+    selectedNote.set({});
+    queueMicrotask(() => {
+      document.getElementById('noteList')?.scrollTo?.({ top: 0 });
+    });
   }
 });
 
@@ -1289,8 +1029,8 @@ function persistPreference(store, key, serialize) {
 
 persistPreference(fullScreen, 'fullScreen', (v) => JSON.stringify(v));
 persistPreference(windowed, 'windowed', (v) => JSON.stringify(v));
-persistPreference(showClock, 'showClock', (v) => String(v));
-persistPreference(showStatusBar, 'showStatusBar', (v) => JSON.stringify(v));
+persistPreference(showClock, 'showClock', (v) => JSON.stringify(!!v));
+persistPreference(showStatusBar, 'showStatusBar', (v) => JSON.stringify(!!v));
 persistPreference(markdownPreviewPlain, 'markdownPreviewPlain', (v) => JSON.stringify(v));
 persistPreference(markdownPreviewRich, 'markdownPreviewRich', (v) => JSON.stringify(v));
 persistPreference(birthDate, 'birthDate', (v) => v);

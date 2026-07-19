@@ -19,9 +19,8 @@
     isMobile,
     selectNoteByGuid,
     findNoteByNameExact,
-  } from './store';
-
-  const SETTINGS_GUID = '00000000-0000-0000-0000-000000000000';
+    SETTINGS_GUID,
+  } from '$lib/store';
 
   let omniInput = $state();
   let time = $state(new Date());
@@ -55,7 +54,7 @@
   });
 
   const clearSelection = (e) => {
-    if (e.keyCode === 27) {
+    if (e.key === 'Escape') {
       omniText.set('');
       bodyText.set('');
       omniInput.focus();
@@ -64,7 +63,32 @@
 
   const handleTitleEnter = (e) => {
     if ($omniText === '') return;
-    e.keyCode === 13 && addNote();
+    if (e.key === 'Enter') addNote();
+  };
+
+  /** @param {KeyboardEvent} e */
+  const handleOmniKeydown = (e) => {
+    if (e.key === 'ArrowDown') {
+      const first = document.querySelector('#noteList li[data-guid]');
+      const guid = first?.getAttribute('data-guid');
+      if (!guid) return;
+      e.preventDefault();
+      selectNoteByGuid(guid);
+      document.getElementById('noteList')?.focus();
+      return;
+    }
+    handleTitleEnter(e);
+  };
+
+  /** @param {FocusEvent} e */
+  const handleOmniFocus = (e) => {
+    const input = e.currentTarget;
+    if (!(input instanceof HTMLInputElement)) return;
+    if (input.dataset.focusCaretEnd === '1') {
+      delete input.dataset.focusCaretEnd;
+      return;
+    }
+    input.select();
   };
 
   const addNote = async () => {
@@ -113,8 +137,8 @@
       id="omni-input"
       bind:this={omniInput}
       bind:value={$omniText}
-      onkeydown={handleTitleEnter}
-      onfocus={() => omniInput.select()}
+      onkeydown={handleOmniKeydown}
+      onfocus={handleOmniFocus}
       type="text"
       class="flex-grow py-0.5 px-1 flex-grow"
       placeholder="Search or Create"

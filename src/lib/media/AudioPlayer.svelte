@@ -8,60 +8,23 @@
     mediaViewerHeight,
     selectNoteByGuid,
     isMobile,
-  } from './store';
+  } from '$lib/store';
   import {
     mediaPlaylist,
     mediaTrackIndex,
     mediaPlayRequest,
     mediaClearSession,
-    mediaRemoveTrack,
-    mediaReorderTrack,
     mediaAdvanceAfterFinish,
     mediaJumpTo,
     mediaTrackProvider,
   } from './mediaSession';
-  import MediaViewer from './media/MediaViewer.svelte';
+  import { loadWidgetApi, WIDGET_OPTS } from './soundcloudWidget';
+  import MediaViewer from './MediaViewer.svelte';
+  import MediaPlaylistPanel from './MediaPlaylistPanel.svelte';
+  import TrackTitleMarquee from './TrackTitleMarquee.svelte';
 
   const PLAYER_HEIGHT = 40;
   const PLAYER_SLIDE = { duration: 250, easing: cubicOut };
-  const WIDGET_API_SRC = 'https://w.soundcloud.com/player/api.js';
-  const WIDGET_OPTS = {
-    show_artwork: false,
-    show_comments: false,
-    sharing: false,
-    download: false,
-    buying: false,
-    auto_play: false,
-    visual: false,
-    single_active: true,
-  };
-
-  /** @type {Promise<void> | null} */
-  let widgetApiPromise = null;
-
-  function loadWidgetApi() {
-    if (typeof window === 'undefined') return Promise.reject(new Error('no window'));
-    if (window.SC?.Widget) return Promise.resolve();
-    if (widgetApiPromise) return widgetApiPromise;
-
-    widgetApiPromise = new Promise((resolve, reject) => {
-      const existing = document.querySelector(`script[src="${WIDGET_API_SRC}"]`);
-      if (existing) {
-        existing.addEventListener('load', () => resolve());
-        existing.addEventListener('error', () => reject(new Error('Widget API failed')));
-        if (window.SC?.Widget) resolve();
-        return;
-      }
-      const script = document.createElement('script');
-      script.src = WIDGET_API_SRC;
-      script.async = true;
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error('Widget API failed'));
-      document.head.appendChild(script);
-    });
-
-    return widgetApiPromise;
-  }
 
   function formatTime(ms) {
     if (!Number.isFinite(ms) || ms < 0) return '0:00';
@@ -74,13 +37,6 @@
   /** @param {string} url */
   function shortUrl(url) {
     return url.replace(/^https?:\/\/(www\.)?/, '');
-  }
-
-  /** @param {{ url?: string, label?: string } | null | undefined} track */
-  function trackPrimaryLabel(track) {
-    if (!track) return '';
-    if (track.label) return track.label;
-    return track.url ? shortUrl(track.url) : '';
   }
 
   let playlist = $derived($mediaPlaylist);
@@ -100,8 +56,6 @@
   let sourceNoteGuid = $derived(currentTrack?.noteGuid ?? '');
 
   let playlistOpen = $state(false);
-  let dragFromIndex = $state(-1);
-  let dragOverIndex = $state(-1);
 
   /** @type {HTMLVideoElement | null} */
   let videoEl = $state(null);
@@ -135,12 +89,6 @@
     if (note && track) return `${note} · ${track}`;
     return note || track || '';
   });
-
-  /** @type {HTMLDivElement | null} */
-  let marqueeEl = $state(null);
-  /** @type {HTMLSpanElement | null} */
-  let marqueeMeasureEl = $state(null);
-  let marqueeScrolling = $state(false);
 
   let currentLabel = $derived(formatTime(positionMs));
   let durationLabel = $derived(formatTime(durationMs));
@@ -259,26 +207,6 @@
     positionMs = 0;
     durationMs = 0;
     ready = true;
-  });
-
-  // Overflow-aware marquee: scroll only when the combined title doesn't fit.
-  $effect(() => {
-    const text = displayTitle;
-    const el = marqueeEl;
-    const measure = marqueeMeasureEl;
-    if (!el || !measure || !text) {
-      marqueeScrolling = false;
-      return;
-    }
-
-    const update = () => {
-      marqueeScrolling = measure.scrollWidth > el.clientWidth + 1;
-    };
-
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
   });
 
   function bindWidgetEvents(activeWidget) {
@@ -543,35 +471,6 @@
   function togglePlaylist() {
     playlistOpen = !playlistOpen;
   }
-
-  function onRowPlay(index) {
-    mediaJumpTo(index, true);
-  }
-
-  function onDragStart(index, e) {
-    dragFromIndex = index;
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', String(index));
-  }
-
-  function onDragOver(index, e) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    dragOverIndex = index;
-  }
-
-  function onDrop(index, e) {
-    e.preventDefault();
-    const from = dragFromIndex >= 0 ? dragFromIndex : Number(e.dataTransfer.getData('text/plain'));
-    if (Number.isFinite(from)) mediaReorderTrack(from, index);
-    dragFromIndex = -1;
-    dragOverIndex = -1;
-  }
-
-  function onDragEnd() {
-    dragFromIndex = -1;
-    dragOverIndex = -1;
-  }
 </script>
 
 {#if visible}
@@ -664,34 +563,7 @@
         </button>
       {/if}
 
-      {#if displayTitle}
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div
-          class="track-title marquee min-w-0"
-          class:scrolling={marqueeScrolling}
-          class:has-source={!!sourceNoteGuid}
-          bind:this={marqueeEl}
-          title={sourceNoteGuid
-            ? `${displayTitle} — Double-click to open note`
-            : displayTitle}
-          ondblclick={openSourceNote}
-          style={marqueeScrolling
-            ? `--marquee-duration: ${Math.max(10, displayTitle.length * 0.35)}s`
-            : undefined}
-        >
-          <span class="marquee-measure" bind:this={marqueeMeasureEl} aria-hidden="true">
-            {displayTitle}
-          </span>
-          <div class="marquee-viewport">
-            <div class="marquee-track">
-              <span class="marquee-text">{displayTitle}</span>
-              {#if marqueeScrolling}
-                <span class="marquee-text" aria-hidden="true">{displayTitle}</span>
-              {/if}
-            </div>
-          </div>
-        </div>
-      {/if}
+      <TrackTitleMarquee {displayTitle} {sourceNoteGuid} onOpenSourceNote={openSourceNote} />
 
       {#if isSoundCloud}
         <span class="time flex-shrink-0" aria-label="Current time">{currentLabel}</span>
@@ -798,68 +670,7 @@
     </div>
 
     {#if playlistOpen}
-      <div class="playlist-panel thin-scrollbar" role="list" aria-label="Playlist">
-        {#each playlist as track, index (track.id)}
-          <div
-            class="playlist-row flex items-center gap-2"
-            class:current={index === trackIndex}
-            class:played={track.played && index !== trackIndex}
-            class:drag-over={dragOverIndex === index}
-            role="listitem"
-            draggable="true"
-            ondragstart={(e) => onDragStart(index, e)}
-            ondragover={(e) => onDragOver(index, e)}
-            ondrop={(e) => onDrop(index, e)}
-            ondragend={onDragEnd}
-          >
-            <span class="drag-handle flex-shrink-0" aria-hidden="true" title="Drag to reorder">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                <circle cx="9" cy="6" r="1.5" />
-                <circle cx="15" cy="6" r="1.5" />
-                <circle cx="9" cy="12" r="1.5" />
-                <circle cx="15" cy="12" r="1.5" />
-                <circle cx="9" cy="18" r="1.5" />
-                <circle cx="15" cy="18" r="1.5" />
-              </svg>
-            </span>
-            <button
-              type="button"
-              class="playlist-main min-w-0 flex-grow flex flex-col items-start"
-              onclick={() => onRowPlay(index)}
-            >
-              <span class="playlist-url truncate w-full" title={track.label || track.url}>
-                {trackPrimaryLabel(track)}
-              </span>
-              <span class="playlist-note truncate w-full" title={track.noteName}>
-                {track.noteName}
-                {#if track.played && index !== trackIndex}
-                  <span class="played-tag"> · played</span>
-                {/if}
-              </span>
-            </button>
-            <button
-              type="button"
-              class="icon-btn flex-shrink-0"
-              onclick={() => mediaRemoveTrack(track.id)}
-              aria-label="Remove track"
-              title="Remove"
-            >
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                aria-hidden="true"
-              >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-          </div>
-        {/each}
-      </div>
+      <MediaPlaylistPanel {playlist} {trackIndex} />
     {/if}
   </div>
 {/if}
@@ -948,54 +759,6 @@
     line-height: 1;
   }
 
-  .track-title {
-    flex: 0 1 14em;
-    color: #a0a0a0;
-    position: relative;
-    overflow: hidden;
-    min-width: 4em;
-  }
-
-  .track-title.has-source {
-    cursor: pointer;
-  }
-
-  .marquee-measure {
-    position: absolute;
-    visibility: hidden;
-    white-space: nowrap;
-    pointer-events: none;
-  }
-
-  .marquee-viewport {
-    overflow: hidden;
-    width: 100%;
-  }
-
-  .marquee-track {
-    display: inline-flex;
-    white-space: nowrap;
-    will-change: transform;
-  }
-
-  .marquee.scrolling .marquee-text {
-    padding-right: 2.5em;
-  }
-
-  .marquee.scrolling .marquee-track {
-    animation: marquee-scroll linear infinite;
-    animation-duration: var(--marquee-duration, 12s);
-  }
-
-  @keyframes marquee-scroll {
-    from {
-      transform: translateX(0);
-    }
-    to {
-      transform: translateX(-50%);
-    }
-  }
-
   .time {
     font-variant-numeric: tabular-nums;
     min-width: 2.4em;
@@ -1069,70 +832,6 @@
 
   .volume input {
     width: 56px;
-  }
-
-  .playlist-panel {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    max-height: 220px;
-    overflow-y: auto;
-    background: var(--app-statusbar-background);
-    border-bottom: 1px solid var(--app-statusbar-border);
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.35);
-    z-index: 4;
-  }
-
-  .playlist-row {
-    padding: 6px 8px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-    color: #8a8a8a;
-  }
-
-  .playlist-row.current {
-    background: rgba(255, 255, 255, 0.06);
-    color: rgba(255, 255, 255, 0.88);
-  }
-
-  .playlist-row.played {
-    opacity: 0.55;
-  }
-
-  .playlist-row.drag-over {
-    outline: 1px dashed #525962;
-    outline-offset: -1px;
-  }
-
-  .drag-handle {
-    color: #555;
-    cursor: grab;
-  }
-
-  .playlist-main {
-    border: 0;
-    background: transparent;
-    color: inherit;
-    padding: 0;
-    cursor: pointer;
-    text-align: left;
-  }
-
-  .playlist-url {
-    font-size: 11px;
-  }
-
-  .playlist-note {
-    font-size: 10px;
-    color: #606060;
-  }
-
-  .playlist-row.current .playlist-note {
-    color: #808080;
-  }
-
-  .played-tag {
-    color: #555;
   }
 
   .gap-2 {
