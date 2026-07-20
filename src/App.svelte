@@ -198,12 +198,17 @@
     role="alert"
     style="position: fixed; z-index: 10000; left: 12px; right: 12px; top: 12px; max-width: 520px; margin: 0 auto; padding: 14px 16px; border-radius: 8px; background: #2a1515; border: 1px solid #b41111; color: #fca5a5;"
   >
-    <div class="font-bold text-white">Notes database failed to open</div>
-    <p class="text-sm m-0" style="line-height: 1.4; color: #fca5a5;">{dbOpenError}</p>
-    <p class="text-sm m-0 text-gray-400" style="line-height: 1.4;">
+    <div class="font-bold text-white flex-shrink-0">Notes database failed to open</div>
+    <div
+      class="db-open-error-msg thin-scrollbar min-h-0 overflow-y-auto flex-1 text-sm"
+      style="line-height: 1.4; color: #fca5a5;"
+    >
+      {dbOpenError}
+    </div>
+    <p class="text-sm m-0 text-gray-400 flex-shrink-0" style="line-height: 1.4;">
       Reset restores seeded notes (prefs cleared). Hard Refresh clears caches only.
     </p>
-    <div class="flex flex-wrap gap-2" style="margin-top: 4px;">
+    <div class="flex flex-wrap gap-2 flex-shrink-0" style="margin-top: 4px;">
       <button
         type="button"
         class="btn"
@@ -342,6 +347,14 @@
 <svelte:window onresize={handleViewportResize} />
 
 <style>
+  .db-open-error {
+    max-height: calc(100dvh - 24px);
+    overflow: hidden;
+  }
+  .db-open-error-msg {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
   h1 {
     font-size: 69px;
     line-height: 0;
