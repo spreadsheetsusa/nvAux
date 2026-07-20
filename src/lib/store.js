@@ -11,9 +11,19 @@ import { schema } from './schema';
  */
 
 const storedNoteListHeightRaw = localStorage.getItem('noteListHeight');
-/** True when the user (or a prior session) has a persisted note-list height. */
-export const noteListHeightHasStore = storedNoteListHeightRaw !== null;
-const storedNoteListHeight = storedNoteListHeightRaw || 220;
+const parsedNoteListHeight = Number(storedNoteListHeightRaw);
+/**
+ * True when a real preferred height is stored. Values at the clamp floor (60)
+ * are treated as unset — they usually come from a layout-race clamp that was
+ * incorrectly persisted, which hides the note list on later visits.
+ */
+export const noteListHeightHasStore =
+  storedNoteListHeightRaw !== null &&
+  Number.isFinite(parsedNoteListHeight) &&
+  parsedNoteListHeight > 60;
+const storedNoteListHeight = noteListHeightHasStore
+  ? parsedNoteListHeight
+  : 220;
 const storedSidebarWidth = localStorage.getItem('sidebarWidth') || 443;
 
 /** @param {string} key @param {boolean} fallback */

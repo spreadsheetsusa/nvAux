@@ -97,9 +97,11 @@
     // Preferred exists: clamp display only — do not overwrite preferred/localStorage.
     const display = Math.max(
       NOTE_LIST_MIN_PX,
-      Math.min(preferredNoteListHeight, max)
+      Math.min(preferredNoteListHeight ?? max, max)
     );
-    noteListHeight.set(display);
+    if (get(noteListHeight) !== display) {
+      noteListHeight.set(display);
+    }
   }
 
   function onNoteListUserChange(height) {
