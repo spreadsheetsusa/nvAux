@@ -8,12 +8,12 @@
   }
 </script>
 
-<MarketingSection wide className="cta" eyebrow="Modes" title="Ready for the full desk?">
+<MarketingSection wide className="cta" eyebrow="Modes" title="Take the full surface">
   <p class="cta-copy">
-    Demo Mode is the landing pad. App Mode goes edge-to-edge. Windowed floats a resizable workspace —
-    flip that in Settings. Minimize anytime from the Omnibar.
+    App Mode fills the viewport. Windowed floats a resizable workspace — flip that in Settings.
+    Minimize from the Omnibar anytime to return here.
   </p>
-  <button type="button" class="cta-btn" onclick={enterAppMode}>Try App Mode</button>
+  <button type="button" class="cta-btn" onclick={enterAppMode}>Enter App Mode</button>
 </MarketingSection>
 
 <style>

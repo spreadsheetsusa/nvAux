@@ -1,13 +1,13 @@
 {
   "name": "nvAux",
   "short_name": "nvAux",
-  "description": "the note-taking app for creative professionals",
+  "description": "Notes that hold anything. A calendar that holds a life.",
   "icons": [
     { "src": "favicon.png", "type": "image/png", "sizes": "192x192", "purpose": "maskable" },
     { "src": "favicon.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
   ],
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#000",
+  "background_color": "#181a1c",
   "theme_color": "#181a1c"
 }

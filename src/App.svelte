@@ -1,4 +1,5 @@
 <script>
+  import { get } from 'svelte/store';
   import { onMount } from 'svelte';
 
   import OmniBar from '$lib/components/chrome/OmniBar.svelte';
@@ -20,6 +21,8 @@
     sidebarOpen,
     sidebarWidth,
     noteListHeight,
+    noteListHeightHasStore,
+    persistNoteListHeight,
     mediaPlayerHeight,
     notePopups,
     closeAllEditorPopups,
@@ -44,10 +47,18 @@
   /** Minimum NoteDetail viewport so body content is never pushed past the fold. */
   const NOTE_DETAIL_MIN_PX = 120;
   const NOTE_LIST_MIN_PX = 60;
+  /** First-layout default: half of list+detail available space. */
+  const NOTE_LIST_DEFAULT_RATIO = 0.5;
 
   let mainContent = $state(null);
   let dbOpenError = $state('');
   let dbRecoveryBusy = $state(false);
+  /** User/preferred height; null until first layout chooses a default. */
+  let preferredNoteListHeight = $state(
+    noteListHeightHasStore ? get(noteListHeight) : null
+  );
+  /** True after a stored preference exists or first-layout default was written. */
+  let noteListDefaultApplied = $state(noteListHeightHasStore);
 
   let isDemo = $derived(!$fullScreen);
   let isAppWindowed = $derived($fullScreen && $windowed && !$isMobile);
@@ -80,13 +91,53 @@
     return Math.max(NOTE_LIST_MIN_PX, mainContent.clientHeight - reserved);
   }
 
-  function clampNoteListHeight() {
+  /**
+   * Apply note-list height for the current layout.
+   * Preferred height is persisted; temporary clamp-downs are display-only.
+   * Collapsed (`0`) remains a valid preferred state.
+   */
+  function applyNoteListHeight() {
+    if (!mainContent || mainContent.clientHeight <= 0) return;
+
     const max = getNoteListMax();
-    noteListHeight.update((h) => {
-      if (h === 0) return 0;
-      if (h > 0 && h < NOTE_LIST_MIN_PX) return 0;
-      return h > max ? max : h;
-    });
+    const available =
+      mainContent.clientHeight - listChromePx - $mediaPlayerHeight;
+
+    if (!noteListDefaultApplied) {
+      // First open: once layout has a real size, pick a default and persist it.
+      const preferred = Math.round(
+        Math.min(
+          max,
+          Math.max(NOTE_LIST_MIN_PX, available * NOTE_LIST_DEFAULT_RATIO)
+        )
+      );
+      preferredNoteListHeight = preferred;
+      noteListHeight.set(preferred);
+      persistNoteListHeight(preferred);
+      noteListDefaultApplied = true;
+      return;
+    }
+
+    // Collapsed preference: keep collapsed (do not auto-expand on shrink/grow).
+    if (preferredNoteListHeight === 0) {
+      if (get(noteListHeight) !== 0) noteListHeight.set(0);
+      return;
+    }
+
+    // Preferred exists: clamp display only — do not overwrite preferred/localStorage.
+    const display = Math.max(
+      NOTE_LIST_MIN_PX,
+      Math.min(preferredNoteListHeight ?? max, max)
+    );
+    if (get(noteListHeight) !== display) {
+      noteListHeight.set(display);
+    }
+  }
+
+  function onNoteListUserChange(height) {
+    preferredNoteListHeight = height;
+    persistNoteListHeight(height);
+    noteListDefaultApplied = true;
   }
 
   // Keep NoteDetail on-screen when the app window (or media chrome) shrinks.
@@ -97,8 +148,8 @@
     void listChromePx;
     if (!el) return;
 
-    clampNoteListHeight();
-    const ro = new ResizeObserver(() => clampNoteListHeight());
+    applyNoteListHeight();
+    const ro = new ResizeObserver(() => applyNoteListHeight());
     ro.observe(el);
     return () => ro.disconnect();
   });
@@ -179,6 +230,9 @@
   class="w-screen flex flex-col items-center transition-all {isDemo
     ? 'h-screen overflow-y-auto'
     : 'h-screen overflow-hidden justify-center'} {isAppFullscreen ? '' : 'p-2'}"
+  style={!isAppFullscreen
+    ? 'padding-top: max(0.5rem, env(safe-area-inset-top, 0px)); padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));'
+    : undefined}
 >
   <div
     class="w-full flex flex-col items-center"
@@ -194,7 +248,7 @@
       <div style="perspective: {isDemo ? '150' : '0'}px;" class="transition-all">
         <h1 style="opacity: 0.9; text-shadow: 1px 3px 5px rgba(0,0,0,0.5); transform: rotateX(6deg) rotateY(0deg); transform-style: preserve-3d;">nvAux</h1>
       </div>
-      <p class="text-balance">The multi-tool note-taking app for creative professionals that works at the speed of thought.</p>
+      <p class="text-balance">Notes that hold anything. A calendar that holds a life.</p>
       <DemoAccentPresets />
     </div>
 
@@ -245,6 +299,7 @@
           collapseBelow={NOTE_LIST_MIN_PX}
           getMax={getNoteListMax}
           ariaLabel="Resize note list"
+          onUserChange={onNoteListUserChange}
         />
         <NoteDetail />
         {#if $showStatusBar}
@@ -338,6 +393,11 @@
     height: 100%;
     border: 1px solid rgba(0,0,0,0.0);
     border-radius: 0;
+    /* viewport-fit=cover + black-translucent: keep chrome clear of notch/home indicator. */
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
   }
   main.windowed {
     max-width: 690px;

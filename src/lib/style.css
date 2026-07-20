@@ -12,7 +12,11 @@ a { color: inherit; text-decoration: inherit; }
 button, input, optgroup, select, textarea { padding: 0; line-height: inherit; color: inherit; }
 pre, code, kbd, samp { font-family: Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
 
-html, body { margin: 0; padding: 0; font-family: Verdana, Geneva, Tahoma, sans-serif; font-size: 0.9rem; height: 100dvh; width: 100%; max-width: 100%; overflow: hidden;}
+html {
+	/* Solid underlay for overscroll / PWA chrome bleed (matches --app-background). */
+	background-color: var(--app-background);
+}
+html, body { margin: 0; padding: 0; font-family: Verdana, Geneva, Tahoma, sans-serif; font-size: 0.9rem; height: 100dvh; width: 100%; max-width: 100%; overflow: hidden; overscroll-behavior: none;}
 .absolute { position: absolute; }
 .bg-gray-800 { background-color: #2d3748; }
 .bg-transparent { background-color: transparent; }
@@ -127,6 +131,7 @@ body.is-panel-resizing .sidebar-resize-layer {
 
 /* Light/Dark Mode Support */
 :root {
+	color-scheme: light dark;
 	--text-color: black;
 	--app-accent: #ed0178;
 	/* Accent-seeded page gradient (JS updates these; defaults match soft rose/pink/lilac/slate). */

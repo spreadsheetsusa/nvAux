@@ -5,8 +5,8 @@
 <MarketingSection
   tight
   className="manifesto"
-  title="Notes that get out of the way."
-  lead="nvAux is built for the moment before the idea evaporates — when you're in the zone and the last thing you need is another login screen. Capture fast. Find it faster. Stay there."
+  title="Built like a tool. Feels like a studio."
+  lead="nvAux is a local-first note app with the precision of a command palette and the energy of a media deck. One Omnibar. Persistent sessions. Floating windows when you want them. An early product with a long runway — and a clear point of view."
 >
   <div class="manifesto-rule" aria-hidden="true"></div>
 </MarketingSection>

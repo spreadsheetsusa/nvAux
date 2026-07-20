@@ -11,8 +11,8 @@
 
   <FeatureSpotlight
     eyebrow="Omnibar"
-    title="Search is create."
-    body="Type once. The list filters as you go. Hit Enter and a new note is born. Same keystroke, zero ceremony — the Notational Velocity spirit, in the browser."
+    title="Search and create are the same gesture"
+    body="Type once. The list filters as you go. Arrow or click to open what already exists. Press Enter on a new name — that is the note. Same keystroke, zero ceremony."
     align="left"
     motif="omnibar"
   />
@@ -27,24 +27,24 @@
 
   <FeatureSpotlight
     eyebrow="Life Calendar"
-    title="See your weeks. All of them."
-    body="A grid of your life — past, now, future. Zoom into a week and find the notes that lived there. Time isn't a sidebar afterthought; it's the map."
+    title="The first lifetime-aware note app"
+    body="Life Calendar lays out every week you have lived and every week still ahead. Your notes sit inside the span of a life — not a folder tree, not a blank archive. Time is the organizing principle."
     align="left"
     motif="calendar"
   />
 
   <FeatureSpotlight
     eyebrow="Wiki links"
-    title="Connect the dots. Or stare at the map."
-    body="Write [[like this]] and notes become a web. Open Graph View when you want the big picture — force-directed, clickable, no plugin zoo."
+    title="A note can be anything"
+    body="Markdown when you need it. Write [[like this]] and notes become a web. Open Graph View when you want the big picture — force-directed, clickable, no plugin zoo."
     align="right"
     motif="graph"
   />
 
   <FeatureSpotlight
     eyebrow="Media session"
-    title="Notes that keep the beat."
-    body="Queue SoundCloud or video (YouTube and file links) from a note — Play Now, Play Next, Add Last — and keep writing while the player rides under the Omnibar. The session stays until you close it."
+    title="A media deck under the Omnibar"
+    body="Queue SoundCloud or video from any note — Play Now, Play Next, Add Last — and keep writing, searching, and switching while the session rides under the Omnibar until you close it."
     align="left"
     motif="media"
   />
