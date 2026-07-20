@@ -13,6 +13,7 @@
   import StickyNote from '$lib/windowed/StickyNote.svelte';
   import DemoMarketing from '$lib/components/marketing/DemoMarketing.svelte';
   import DemoAccentPresets from '$lib/components/marketing/DemoAccentPresets.svelte';
+  import HeroTagline from '$lib/components/marketing/HeroTagline.svelte';
 
   import {
     db,
@@ -39,6 +40,7 @@
     hardRefreshApp,
   } from '$lib/store';
   import { windowFrame } from './utils/windowFrame';
+  import { demoWindowResize } from './utils/demoWindowResize';
 
   /** Chrome below/above the note list excluding the status bar (OmniBar, handle, margins). */
   const LIST_CHROME_BASE_PX = 65;
@@ -51,6 +53,8 @@
   const NOTE_LIST_DEFAULT_RATIO = 1 / 3;
 
   let mainContent = $state(null);
+  /** Scroll shell that bounds Demo card resize. */
+  let demoBoundsEl = $state(null);
   let dbOpenError = $state('');
   let dbRecoveryBusy = $state(false);
   /** User/preferred height; null until first layout chooses a default. */
@@ -63,6 +67,8 @@
   let isDemo = $derived(!$fullScreen);
   let isAppWindowed = $derived($fullScreen && $windowed && !$isMobile);
   let isAppFullscreen = $derived($fullScreen && (!$windowed || $isMobile));
+  /** Demo card edge/corner resize (desktop only; not draggable). */
+  let isDemoResizable = $derived(isDemo && !$isMobile);
   /** Desktop sidebar expands the window; mobile uses an overlay drawer. */
   let layoutSidebarOpen = $derived($sidebarOpen && !$isMobile);
   let listChromePx = $derived(
@@ -232,6 +238,7 @@
 {/if}
 
 <div
+  bind:this={demoBoundsEl}
   class="w-screen flex flex-col items-center transition-all {isDemo
     ? 'h-screen overflow-y-auto'
     : 'h-screen overflow-hidden justify-center'} {isAppFullscreen ? '' : 'p-2'}"
@@ -253,7 +260,7 @@
       <div style="perspective: {isDemo ? '150' : '0'}px;" class="transition-all">
         <h1 style="opacity: 0.9; text-shadow: 1px 3px 5px rgba(0,0,0,0.5); transform: rotateX(6deg) rotateY(0deg); transform-style: preserve-3d;">nvAux</h1>
       </div>
-      <p class="text-balance">Notes that hold anything. A calendar that holds a life.</p>
+      <HeroTagline />
       <DemoAccentPresets />
     </div>
 
@@ -277,6 +284,10 @@
         threshold: 2,
         initialRect: $appWindowFrame,
         onFrame: handleAppWindowFrame,
+      }}
+      use:demoWindowResize={{
+        enabled: isDemoResizable,
+        boundsEl: demoBoundsEl,
       }}
       class="{isAppFullscreen ? 'fullscreen' : 'windowed'} relative overflow-hidden flex transition-all"
       class:demo-window={isDemo}
@@ -445,15 +456,18 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  /* Invisible corner hit targets — cursor-only chrome */
-  :global(.window-corner) {
+  /* Invisible corner/edge hit targets — cursor-only chrome */
+  :global(.window-corner),
+  :global(.window-edge) {
     position: absolute;
-    width: 16px;
-    height: 16px;
     z-index: 40;
     background: transparent;
     touch-action: none;
     pointer-events: auto;
+  }
+  :global(.window-corner) {
+    width: 16px;
+    height: 16px;
   }
   :global(.window-corner-nw) {
     top: 0;
@@ -474,5 +488,31 @@
     bottom: 0;
     right: 0;
     cursor: nwse-resize;
+  }
+  :global(.window-edge-n),
+  :global(.window-edge-s) {
+    left: 16px;
+    right: 16px;
+    height: 8px;
+    cursor: ns-resize;
+  }
+  :global(.window-edge-n) {
+    top: 0;
+  }
+  :global(.window-edge-s) {
+    bottom: 0;
+  }
+  :global(.window-edge-e),
+  :global(.window-edge-w) {
+    top: 16px;
+    bottom: 16px;
+    width: 8px;
+    cursor: ew-resize;
+  }
+  :global(.window-edge-e) {
+    right: 0;
+  }
+  :global(.window-edge-w) {
+    left: 0;
   }
 </style>

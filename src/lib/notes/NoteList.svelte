@@ -1,5 +1,5 @@
 <script>
-  import { onMount, onDestroy, tick } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { formatDistanceToNow } from 'date-fns';
 
   import {
@@ -32,8 +32,8 @@
 
   let showContextMenu = $state(false);
   let contextMenuNote = $state(null);
-  let contextMenuX = $state(0);
-  let contextMenuY = $state(0);
+  /** @type {{ left: number, top: number, right: number, bottom: number, width: number, height: number } | null} */
+  let contextMenuAnchor = $state(null);
 
   let renamingGuid = $state(null);
   let renameValue = $state('');
@@ -41,19 +41,8 @@
   /** @type {Map<number | string, string>} */
   const dateLabelCache = new Map();
 
-  function handleClickOutside(event) {
-    if (showContextMenu && !event.target.closest('.context-menu')) {
-      handleCloseContextMenu();
-    }
-  }
-
   onMount(async () => {
     db$ = await db();
-    document.addEventListener('click', handleClickOutside);
-  });
-
-  onDestroy(() => {
-    document.removeEventListener('click', handleClickOutside);
   });
 
   // Debounce Omnibar → query (input stays immediate; RxDB resubscribes after pause).
@@ -133,15 +122,37 @@
   function handleContextMenu(event, note) {
     event.preventDefault();
     event.stopPropagation();
+    // Toggle closed if this note's menu is already open (pointerdown dismiss
+    // would otherwise race and reopen on the subsequent click).
+    if (showContextMenu && contextMenuNote?.guid === note?.guid) {
+      handleCloseContextMenu();
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
     showContextMenu = true;
     contextMenuNote = note;
-    contextMenuX = event.clientX;
-    contextMenuY = event.clientY;
+    contextMenuAnchor = {
+      left: rect.left,
+      top: rect.top,
+      right: rect.right,
+      bottom: rect.bottom,
+      width: rect.width,
+      height: rect.height,
+    };
   }
 
   function handleCloseContextMenu() {
     showContextMenu = false;
     contextMenuNote = null;
+    contextMenuAnchor = null;
+  }
+
+  function handleCloseNote(note) {
+    if (note?.guid && $selectedNote?.guid === note.guid) {
+      selectedNote.set({});
+      bodyText.set('');
+    }
+    handleCloseContextMenu();
   }
 
   function handleOpenInNewWindow(note) {
@@ -345,6 +356,7 @@
         <button
           type="button"
           aria-label="Note options"
+          onpointerdown={(event) => event.stopPropagation()}
           onclick={(event) => handleContextMenu(event, note)}
           class="note-options bg-transparent flex items-center flex-shrink-0"
           style="margin-left: 5px; color: {selectedGuid === note.guid ? '#ffffffa0' : '#7e848c'};"
@@ -356,28 +368,27 @@
   {/each}
 </ul>
 
-{#if showContextMenu}
+{#if showContextMenu && contextMenuAnchor}
   <FileListItemContextMenu
     note={contextMenuNote}
-    x={contextMenuX}
-    y={contextMenuY}
+    anchorRect={contextMenuAnchor}
     showOpenInNewWindow={isAppWindowed}
     updatedLabel={$isMobile && contextMenuNote ? formatDate(contextMenuNote.updatedAt) : ''}
     ondelete={handleDeleteNote}
     onrename={handleRename}
     onclose={handleCloseContextMenu}
+    onCloseNote={handleCloseNote}
     onOpenInNewWindow={handleOpenInNewWindow}
   />
 {/if}
 
 <style>
   ul {
-    margin: 0 6px 3px 6px;
+    margin: 0;
     padding: 0;
     overflow-y: auto;
     overflow-x: hidden;
     background-color: var(--app-omni-background);
-    border-radius: 8px;
   }
   ul:focus {
     outline: none;

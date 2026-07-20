@@ -92,7 +92,7 @@
     return () => window.clearTimeout(timeoutId);
   });
 
-  function handleKanbanChange(nextBody) {
+  function handleBodyChange(nextBody) {
     localBody = nextBody;
     handleDebounceSave();
   }
@@ -205,11 +205,11 @@
         <Settings />
       </div>
     {:else}
-      <NoteToolbar note={noteDoc} body={localBody} />
+      <NoteToolbar note={noteDoc} body={localBody} onBodyChange={handleBodyChange} />
       {#if contentLocked}
         <NoteUnlockPanel {guid} />
       {:else if showKanban}
-        <KanbanBoard body={localBody} onChange={handleKanbanChange} />
+        <KanbanBoard body={localBody} onChange={handleBodyChange} />
       {:else if showMarkdownPreview}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <!-- svelte-ignore a11y_no_static_element_interactions -->

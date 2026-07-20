@@ -66,6 +66,7 @@ html, body { margin: 0; padding: 0; font-family: Verdana, Geneva, Tahoma, sans-s
 .select-none { user-select: none; }
 .text-center { text-align: center; }
 .text-balance { text-wrap: balance; }
+.text-pretty { text-wrap: pretty; }
 .font-bold { font-weight: 700; }
 .text-sm { font-size: 0.875rem; }
 .text-white { color: #fff; }

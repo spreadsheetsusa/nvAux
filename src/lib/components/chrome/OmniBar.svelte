@@ -121,13 +121,13 @@
 
 <div
   class="omnibar flex items-center border-box"
-  style="background-color: var(--app-omni-background); height: 42px; padding-left: 10px; flex-shrink: 0;"
+  style="background-color: var(--app-omni-background); height: 42px; padding-left: 4px; flex-shrink: 0;"
 >
   <button
     type="button"
     aria-label="Toggle sidebar"
     aria-expanded={$sidebarOpen}
-    class="bg-transparent flex items-center px-2 leading-none outline-none"
+    class="bg-transparent flex items-center px-1 leading-none outline-none"
     onclick={() => ($sidebarOpen = !$sidebarOpen)}
   >
     <Icon name="Sidebar" />

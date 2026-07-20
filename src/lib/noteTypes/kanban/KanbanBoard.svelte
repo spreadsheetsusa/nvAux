@@ -8,7 +8,6 @@
     moveCard,
   } from './kanbanModel';
   import KanbanColumn from './KanbanColumn.svelte';
-  import KanbanThemeMenu from './KanbanThemeMenu.svelte';
 
   let {
     body = '',
@@ -80,11 +79,6 @@
     if (!board) return;
     const next = mutator(board);
     if (next !== board) emit(theme, next);
-  }
-
-  function onThemeChange(nextTheme) {
-    if (!board) return;
-    emit(nextTheme, board);
   }
 
   function renameColumn(columnId, title) {
@@ -369,8 +363,6 @@
   style={accentStyle}
   bind:this={boardEl}
 >
-  <KanbanThemeMenu {theme} onChange={onThemeChange} />
-
   {#if parseError}
     <div class="parse-error flex-shrink-0">
       Invalid kanban JSON — switch to Edit and fix the source. ({parseError})

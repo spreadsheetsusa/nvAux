@@ -89,7 +89,7 @@
     <p class="mkt-eyebrow">{eyebrow}</p>
   {/if}
   {#if title}
-    <h2 class="mkt-title">{title}</h2>
+    <h2 class="mkt-title text-pretty">{title}</h2>
   {/if}
   {#if lead}
     <p class="mkt-lead">{lead}</p>

@@ -25,6 +25,7 @@
   } from '$lib/media/mediaSession';
   import { isNoteLocked, isNoteSticky } from '$lib/noteTypes/parseNoteMeta';
   import { resolveNoteType } from '$lib/noteTypes/resolveNoteType';
+  import { getNoteTypeProperties } from '$lib/noteTypes/noteTypeProperties';
   import Icon from '$lib/components/Icon.svelte';
   import ToolbarMediaActions from './ToolbarMediaActions.svelte';
   import ToolbarCreatedAt from './ToolbarCreatedAt.svelte';
@@ -36,6 +37,7 @@
   let {
     note = undefined,
     body = undefined,
+    onBodyChange = undefined,
   } = $props();
 
   let activeNote = $derived(note !== undefined ? note : $selectedNote);
@@ -56,6 +58,10 @@
   let unlockedMap = $derived($unlockedNoteActivity);
   let sessionUnlocked = $derived(
     !!activeNote?.guid && unlockedMap?.[activeNote.guid] != null
+  );
+  let PropertiesMenu = $derived(getNoteTypeProperties(noteType));
+  let showProperties = $derived(
+    !!PropertiesMenu && (!lockedOn || sessionUnlocked)
   );
 
   let hasMedia = $derived(canPreview && hasQueueableMedia(activeBody));
@@ -292,6 +298,9 @@
       >
         {$markdownPreview ? 'Edit' : 'Preview'}
       </button>
+      {#if showProperties}
+        <PropertiesMenu body={activeBody} onChange={onBodyChange} />
+      {/if}
     </div>
   </div>
 {/if}

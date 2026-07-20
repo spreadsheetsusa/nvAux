@@ -86,7 +86,7 @@
     return () => window.clearTimeout(timeoutId);
   });
 
-  function handleKanbanChange(nextBody) {
+  function handleBodyChange(nextBody) {
     bodyText.set(nextBody);
     handleDebounceSave();
   }
@@ -255,11 +255,11 @@
       <Settings />
     </div>
   {:else}
-    <NoteToolbar />
+    <NoteToolbar onBodyChange={handleBodyChange} />
     {#if contentLocked}
       <NoteUnlockPanel guid={$selectedNote.guid} />
     {:else if showKanban}
-      <KanbanBoard body={$bodyText} onChange={handleKanbanChange} />
+      <KanbanBoard body={$bodyText} onChange={handleBodyChange} />
     {:else if showMarkdownPreview}
       <!-- Event delegation for [[wiki]] anchors inside {@html} preview -->
       <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -301,10 +301,8 @@
 
 <style>
   .note-detail {
-    margin-top: 0;
-    margin-left: 6px;
-    margin-right: 6px;
-    border-radius: 8px;
+    margin: 0;
+    border-radius: 0;
     /* Safety: never collapse away when the note list was left tall */
     min-height: 120px;
   }

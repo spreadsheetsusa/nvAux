@@ -2,10 +2,10 @@ import { clampFrameRect, FRAME_EDGE_MARGIN } from './clampFrame';
 import {
   FRAME_MOVE_THRESHOLD,
   computeClampedMove,
-  computeCornerResize,
-  cornerFromTarget,
-  createCornerHandles,
-  cursorForCorner,
+  computeHandleResize,
+  createFrameHandles,
+  cursorForHandle,
+  handleFromTarget,
 } from './frameResize';
 
 const MOVE_THRESHOLD = FRAME_MOVE_THRESHOLD;
@@ -50,7 +50,7 @@ export function windowFrame(node, params = {}) {
   let moving = false;
   let resizing = false;
   /** @type {string | null} */
-  let resizeCorner = null;
+  let resizeHandle = null;
   /** @type {number | null} */
   let pointerId = null;
 
@@ -63,10 +63,10 @@ export function windowFrame(node, params = {}) {
   let suppressClick = false;
 
   /** @type {HTMLDivElement[]} */
-  const cornerEls = createCornerHandles(node);
+  const handleEls = createFrameHandles(node, { edges: true });
 
-  function syncCorners() {
-    for (const el of cornerEls) {
+  function syncHandles() {
+    for (const el of handleEls) {
       el.style.display = enabled ? '' : 'none';
     }
   }
@@ -231,7 +231,7 @@ export function windowFrame(node, params = {}) {
     if (!(target instanceof Element)) return true;
     if (target.closest('.resize-handle')) return true;
     if (target.closest('.omnibar button')) return true;
-    if (target.closest('.window-corner')) return true;
+    if (target.closest('.window-corner, .window-edge')) return true;
     return false;
   }
 
@@ -262,23 +262,31 @@ export function windowFrame(node, params = {}) {
     pendingMove = false;
     moving = false;
     resizing = false;
-    resizeCorner = null;
+    resizeHandle = null;
     pointerId = null;
     event?.preventDefault?.();
   }
 
-  function onCornerPointerDown(event) {
+  function onHandlePointerDown(event) {
     if (!enabled) return;
     if (event.button != null && event.button !== 0) return;
-    const corner = cornerFromTarget(event.target);
-    if (!corner) return;
+    const handleEl =
+      event.target instanceof Element
+        ? event.target.closest('.window-corner, .window-edge')
+        : null;
+    // Ignore Demo action's twin handles on the same node.
+    if (!(handleEl instanceof HTMLDivElement) || !handleEls.includes(handleEl)) {
+      return;
+    }
+    const handle = handleFromTarget(handleEl);
+    if (!handle) return;
 
     event.preventDefault();
     event.stopPropagation();
     ensurePinned();
 
     resizing = true;
-    resizeCorner = corner;
+    resizeHandle = handle;
     pointerId = event.pointerId;
     startClientX = event.clientX;
     startClientY = event.clientY;
@@ -292,12 +300,12 @@ export function windowFrame(node, params = {}) {
     } catch {
       /* ignore */
     }
-    armInteraction(cursorForCorner(corner));
+    armInteraction(cursorForHandle(handle));
   }
 
   function onPointerDown(event) {
-    if (cornerFromTarget(event.target)) {
-      onCornerPointerDown(event);
+    if (handleFromTarget(event.target)) {
+      onHandlePointerDown(event);
       return;
     }
     if (!enabled) return;
@@ -312,8 +320,8 @@ export function windowFrame(node, params = {}) {
   }
 
   function applyResize(dx, dy) {
-    const next = computeCornerResize({
-      corner: resizeCorner,
+    const next = computeHandleResize({
+      handle: resizeHandle,
       dx,
       dy,
       startLeft,
@@ -397,7 +405,7 @@ export function windowFrame(node, params = {}) {
     pendingMove = false;
     moving = false;
     resizing = false;
-    resizeCorner = null;
+    resizeHandle = null;
     pointerId = null;
     clearInteractionChrome();
     applyFrame();
@@ -425,7 +433,7 @@ export function windowFrame(node, params = {}) {
     emitFrame();
   }
 
-  syncCorners();
+  syncHandles();
   if (enabled) {
     // Fresh load already in Windowed: restore persisted frame or default card.
     setFrame(resolveTargetRect(), { transition: false });
@@ -458,13 +466,13 @@ export function windowFrame(node, params = {}) {
         resetFrame();
       } else if (!enabled && nextEnabled) {
         enabled = true;
-        syncCorners();
+        syncHandles();
         enterWindowedAnimated();
         return;
       }
 
       enabled = nextEnabled;
-      syncCorners();
+      syncHandles();
     },
     destroy() {
       endInteraction();
@@ -477,7 +485,7 @@ export function windowFrame(node, params = {}) {
       node.removeEventListener('pointercancel', onPointerUp);
       node.removeEventListener('lostpointercapture', onLostCapture);
       node.removeEventListener('click', onClickCapture, true);
-      for (const el of cornerEls) el.remove();
+      for (const el of handleEls) el.remove();
     },
   };
 }
