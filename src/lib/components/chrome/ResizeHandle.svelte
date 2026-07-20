@@ -15,6 +15,8 @@
      * once past ~half this threshold.
      */
     collapseBelow = null,
+    /** Called only for user-driven value changes (drag move / drag end). */
+    onUserChange = undefined,
   } = $props();
 
   let dragging = $state(false);
@@ -72,6 +74,7 @@
     const delta = (pos - startPos) * (invert ? -1 : 1);
     const continuous = Math.round(clamp(startValue + delta, min, activeMax));
     value = applySnap(continuous);
+    onUserChange?.(value);
   }
 
   function onPointerUp(event) {
@@ -79,6 +82,7 @@
     if (event.currentTarget?.hasPointerCapture?.(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
+    onUserChange?.(value);
     clearDrag();
   }
 

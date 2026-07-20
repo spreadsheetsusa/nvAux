@@ -52,7 +52,21 @@ function readStoredNumber(key, fallback, min, max) {
   return Math.min(max, Math.max(min, raw));
 }
 
-const storedNoteListHeight = readStoredNumber('noteListHeight', 220, 0, 2000);
+const storedNoteListHeightRaw = localStorage.getItem('noteListHeight');
+const parsedNoteListHeight = Number(storedNoteListHeightRaw);
+/**
+ * True when a real preferred height is stored.
+ * - `0` is a valid collapsed preference (main collapse UX).
+ * - Values `1..60` are treated as unset — they usually come from a layout-race
+ *   clamp that was incorrectly persisted, which hides the note list on later visits.
+ */
+export const noteListHeightHasStore =
+  storedNoteListHeightRaw !== null &&
+  Number.isFinite(parsedNoteListHeight) &&
+  (parsedNoteListHeight === 0 || parsedNoteListHeight > 60);
+const storedNoteListHeight = noteListHeightHasStore
+  ? parsedNoteListHeight
+  : 220;
 const storedSidebarWidth = readStoredNumber('sidebarWidth', 443, 200, 1200);
 const storedMediaViewerHeight = readStoredNumber('mediaViewerHeight', 220, 120, 480);
 
@@ -212,6 +226,10 @@ const storedStickyNoteFrames = parseStickyNoteFrames(
 export const omniMode = writable('search');
 export const omniText = writable('');
 export const noteListHeight = writable(Number(storedNoteListHeight));
+/** Persist preferred note-list height only (not temporary layout clamps). */
+export function persistNoteListHeight(height) {
+  localStorage.setItem('noteListHeight', String(height));
+}
 export const sidebarWidth = writable(Number(storedSidebarWidth));
 export const graphViewOpen = writable(storedGraphViewOpen);
 export const graphViewHeight = writable(Number(storedGraphViewHeight));
@@ -982,7 +1000,6 @@ omniText.subscribe((v) => {
   }
 });
 
-noteListHeight.subscribe(v => localStorage.setItem('noteListHeight', v.toString()));
 mediaViewerHeight.subscribe((v) => localStorage.setItem('mediaViewerHeight', v.toString()));
 sidebarWidth.subscribe(v => localStorage.setItem('sidebarWidth', v.toString()));
 sidebarOpen.subscribe(v => localStorage.setItem('sidebarOpen', JSON.stringify(v)));

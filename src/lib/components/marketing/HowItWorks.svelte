@@ -2,15 +2,15 @@
   import MarketingSection from './MarketingSection.svelte';
 
   const steps = [
-    { title: 'Type', body: 'Search or start a note in the Omnibar.' },
-    { title: 'Filter', body: 'The list narrows as you go — click or arrow to open.' },
-    { title: 'Create', body: 'Press Enter when nothing matches. Done.' },
+    { title: 'Type', body: 'Type in the Omnibar — the list narrows as you go.' },
+    { title: 'Open', body: 'Arrow or click to open what already exists.' },
+    { title: 'Create', body: 'Press Enter on a new name — that is the note.' },
   ];
 </script>
 
 <MarketingSection
   eyebrow="How it works"
-  title="Three moves. That's the whole game."
+  title="Search and create are the same gesture"
   wide
   className="how"
 >
