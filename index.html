@@ -4,13 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="description" content="Notes that hold anything. A calendar that holds a life. nvAux — the first lifetime-aware note app." />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <!-- Translucent: home-screen status bar shows page bg (app chrome) underneath. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="mobile-web-app-capable" content="yes" />
+    <!-- Match --app-background so browser/PWA chrome blends with the shell. -->
+    <meta name="theme-color" content="#eaeaea" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#181a1c" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#181a1c" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 
-    <link rel="mainifest" href="/manifest.json" />
-    <!-- <link rel="manifest" href='data:application/manifest+json,{ "name": "nvAux", "short_name": "nvAux", "description": "Notes that hold anything. A calendar that holds a life.", "icons": [ { "src": "favicon.png", "type": "image/png", "sizes": "512x512" } ], "start_url": "/", "display": "standalone", "background_color": "#000", "theme_color": "#181a1c" }' /> -->
+    <link rel="manifest" href="/manifest.json" />
 
     <link rel="icon" sizes="192x192" href="/favicon.png">
     <link rel="apple-touch-icon" sizes="192x192" href="/favicon.png">

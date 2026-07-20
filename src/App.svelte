@@ -107,6 +107,9 @@
   class="w-screen flex flex-col items-center transition-all {isDemo
     ? 'min-h-screen overflow-y-auto'
     : 'h-screen overflow-hidden justify-center'} {isAppFullscreen ? '' : 'p-2'}"
+  style={!isAppFullscreen
+    ? 'padding-top: max(0.5rem, env(safe-area-inset-top, 0px)); padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));'
+    : undefined}
 >
   <div
     class="w-full flex flex-col justify-center items-center"
@@ -231,6 +234,11 @@
     height: 100%;
     border: 1px solid rgba(0,0,0,0.0);
     border-radius: 0;
+    /* viewport-fit=cover + black-translucent: keep chrome clear of notch/home indicator. */
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
   }
   main.windowed {
     max-width: 690px;
