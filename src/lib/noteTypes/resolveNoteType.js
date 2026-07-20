@@ -1,12 +1,12 @@
 import { isEmptyObject } from '../../utils/isEmptyObject';
 import { parseNoteMeta } from './parseNoteMeta';
 
-/** @typedef {'empty' | 'settings' | 'kanban' | 'markdown'} NoteType */
+/** @typedef {'empty' | 'settings' | 'kanban' | 'music' | 'markdown'} NoteType */
 
 /** Keep local to avoid import cycles with store.js seeding. */
 const SETTINGS_GUID = '00000000-0000-0000-0000-000000000000';
 
-const KNOWN_BODY_TYPES = new Set(['kanban']);
+const KNOWN_BODY_TYPES = new Set(['kanban', 'music']);
 
 /**
  * Rich (non-plaintext) body note types that default to Preview.

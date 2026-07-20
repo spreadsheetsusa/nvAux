@@ -28,6 +28,7 @@
   import { isNoteLocked } from '$lib/noteTypes/parseNoteMeta';
   import { resolveNoteType } from '$lib/noteTypes/resolveNoteType';
   import KanbanBoard from '$lib/noteTypes/kanban/KanbanBoard.svelte';
+  import MusicDaw from '$lib/noteTypes/music/MusicDaw.svelte';
 
 
   let {
@@ -72,6 +73,7 @@
   let noteType = $derived(resolveNoteType(noteDoc ?? { guid }, localBody));
   let showMarkdownPreview = $derived(showPreview && noteType === 'markdown');
   let showKanban = $derived(showPreview && noteType === 'kanban');
+  let showMusic = $derived(showPreview && noteType === 'music');
 
   $effect(() => {
     if (isSettings || missing) return;
@@ -210,6 +212,8 @@
         <NoteUnlockPanel {guid} />
       {:else if showKanban}
         <KanbanBoard body={localBody} onChange={handleBodyChange} />
+      {:else if showMusic}
+        <MusicDaw body={localBody} onChange={handleBodyChange} />
       {:else if showMarkdownPreview}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <!-- svelte-ignore a11y_no_static_element_interactions -->

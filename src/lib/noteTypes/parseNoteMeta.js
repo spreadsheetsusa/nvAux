@@ -24,7 +24,7 @@ export const STICKY_COLORS = /** @type {const} */ (['yellow', 'pink', 'blue']);
  *   sticky?: boolean,
  *   color?: StickyColor,
  *   locked?: boolean,
- *   theme?: { accent?: string, density?: string },
+ *   theme?: { accent?: string, density?: string, skin?: string },
  *   bodyWithoutMeta: string,
  *   hasMeta: boolean
  * }} NoteMeta
@@ -97,10 +97,10 @@ export function parseNoteMeta(body) {
 
 /**
  * @param {string} fm
- * @returns {{ type?: string, sticky?: boolean, color?: StickyColor, locked?: boolean, theme?: { accent?: string, density?: string } }}
+ * @returns {{ type?: string, sticky?: boolean, color?: StickyColor, locked?: boolean, theme?: { accent?: string, density?: string, skin?: string } }}
  */
 function parseFrontmatterBlock(fm) {
-  /** @type {{ type?: string, sticky?: boolean, color?: StickyColor, locked?: boolean, theme?: { accent?: string, density?: string } }} */
+  /** @type {{ type?: string, sticky?: boolean, color?: StickyColor, locked?: boolean, theme?: { accent?: string, density?: string, skin?: string } }} */
   const meta = {};
   let inTheme = false;
 
@@ -112,7 +112,7 @@ function parseFrontmatterBlock(fm) {
       const key = nested[2];
       const value = unquote(nested[3]);
       if (!meta.theme) meta.theme = {};
-      if (key === 'accent' || key === 'density') {
+      if (key === 'accent' || key === 'density' || key === 'skin') {
         meta.theme[key] = value;
       }
       continue;
@@ -161,7 +161,7 @@ function parseFrontmatterBlock(fm) {
  *   sticky?: boolean,
  *   color?: StickyColor,
  *   locked?: boolean,
- *   theme?: { accent?: string, density?: string },
+ *   theme?: { accent?: string, density?: string, skin?: string },
  * }} meta
  * @param {string} bodyContent
  * @returns {string}
@@ -175,10 +175,11 @@ export function serializeNoteMeta(meta, bodyContent) {
   }
   if (meta.locked === true) lines.push('locked: true');
   const theme = meta.theme;
-  if (theme && (theme.accent || theme.density)) {
+  if (theme && (theme.accent || theme.density || theme.skin)) {
     lines.push('theme:');
     if (theme.accent) lines.push(`  accent: "${theme.accent}"`);
     if (theme.density) lines.push(`  density: ${theme.density}`);
+    if (theme.skin) lines.push(`  skin: ${theme.skin}`);
   }
   lines.push('---');
   const body = bodyContent ?? '';
@@ -187,13 +188,16 @@ export function serializeNoteMeta(meta, bodyContent) {
 
 /**
  * @param {ReturnType<typeof parseNoteMeta>} parsed
- * @returns {{ type?: string, sticky?: boolean, color?: StickyColor, locked?: boolean, theme?: { accent?: string, density?: string } }}
+ * @returns {{ type?: string, sticky?: boolean, color?: StickyColor, locked?: boolean, theme?: { accent?: string, density?: string, skin?: string } }}
  */
 function baseMetaFromParsed(parsed) {
-  /** @type {{ type?: string, sticky?: boolean, color?: StickyColor, locked?: boolean, theme?: { accent?: string, density?: string } }} */
+  /** @type {{ type?: string, sticky?: boolean, color?: StickyColor, locked?: boolean, theme?: { accent?: string, density?: string, skin?: string } }} */
   const meta = {};
   if (parsed.type) meta.type = parsed.type;
-  if (parsed.theme && (parsed.theme.accent || parsed.theme.density)) {
+  if (
+    parsed.theme &&
+    (parsed.theme.accent || parsed.theme.density || parsed.theme.skin)
+  ) {
     meta.theme = { ...parsed.theme };
   }
   if (parsed.sticky === true) {
@@ -205,14 +209,17 @@ function baseMetaFromParsed(parsed) {
 }
 
 /**
- * @param {{ type?: string, sticky?: boolean, color?: StickyColor, locked?: boolean, theme?: { accent?: string, density?: string } }} meta
+ * @param {{ type?: string, sticky?: boolean, color?: StickyColor, locked?: boolean, theme?: { accent?: string, density?: string, skin?: string } }} meta
  */
 function metaHasKeys(meta) {
   return (
     !!meta.type ||
     meta.sticky === true ||
     meta.locked === true ||
-    !!(meta.theme && (meta.theme.accent || meta.theme.density))
+    !!(
+      meta.theme &&
+      (meta.theme.accent || meta.theme.density || meta.theme.skin)
+    )
   );
 }
 

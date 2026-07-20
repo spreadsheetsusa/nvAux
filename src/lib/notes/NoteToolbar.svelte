@@ -24,7 +24,7 @@
     hasQueueableMedia,
   } from '$lib/media/mediaSession';
   import { isNoteLocked, isNoteSticky } from '$lib/noteTypes/parseNoteMeta';
-  import { resolveNoteType } from '$lib/noteTypes/resolveNoteType';
+  import { isRichNoteType, resolveNoteType } from '$lib/noteTypes/resolveNoteType';
   import { getNoteTypeProperties } from '$lib/noteTypes/noteTypeProperties';
   import Icon from '$lib/components/Icon.svelte';
   import ToolbarMediaActions from './ToolbarMediaActions.svelte';
@@ -64,7 +64,9 @@
     !!PropertiesMenu && (!lockedOn || sessionUnlocked)
   );
 
-  let hasMedia = $derived(canPreview && hasQueueableMedia(activeBody));
+  let hasMedia = $derived(
+    canPreview && !isRichNoteType(noteType) && hasQueueableMedia(activeBody)
+  );
 
   async function toggleSticky() {
     if (!activeNote || !canSticky) return;

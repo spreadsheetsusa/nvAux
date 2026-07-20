@@ -35,6 +35,7 @@
   import { isNoteLocked } from '$lib/noteTypes/parseNoteMeta';
   import { resolveNoteType } from '$lib/noteTypes/resolveNoteType';
   import KanbanBoard from '$lib/noteTypes/kanban/KanbanBoard.svelte';
+  import MusicDaw from '$lib/noteTypes/music/MusicDaw.svelte';
 
   const handleDebounceSave = debounce(() => updateNote(), 300);
 
@@ -67,6 +68,7 @@
   let noteType = $derived(resolveNoteType($selectedNote, $bodyText));
   let showMarkdownPreview = $derived(showPreview && noteType === 'markdown');
   let showKanban = $derived(showPreview && noteType === 'kanban');
+  let showMusic = $derived(showPreview && noteType === 'music');
 
   $effect(() => {
     syncMarkdownPreviewForNoteType(noteType);
@@ -260,6 +262,8 @@
       <NoteUnlockPanel guid={$selectedNote.guid} />
     {:else if showKanban}
       <KanbanBoard body={$bodyText} onChange={handleBodyChange} />
+    {:else if showMusic}
+      <MusicDaw body={$bodyText} onChange={handleBodyChange} />
     {:else if showMarkdownPreview}
       <!-- Event delegation for [[wiki]] anchors inside {@html} preview -->
       <!-- svelte-ignore a11y_click_events_have_key_events -->

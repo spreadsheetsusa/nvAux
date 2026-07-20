@@ -1,8 +1,10 @@
 import KanbanProperties from './kanban/KanbanProperties.svelte';
+import MusicProperties from './music/MusicProperties.svelte';
 
 /** @type {Record<string, import('svelte').Component>} */
 export const NOTE_TYPE_PROPERTIES = {
   kanban: KanbanProperties,
+  music: MusicProperties,
 };
 
 /**
