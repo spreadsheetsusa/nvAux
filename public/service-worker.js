@@ -1,9 +1,12 @@
 // service-worker.js
-const CACHE_NAME = 'nvAux-cache';
+const CACHE_NAME = 'nvAux-cache-v2';
 const urlsToCache = [
   '/',
   '/index.html',
   '/favicon.png',
+  '/manifest.json',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
 ];
 
 self.addEventListener('install', (event) => {
