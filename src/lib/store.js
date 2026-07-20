@@ -10,7 +10,10 @@ import { schema } from './schema';
  * State that persists to localStorage =========================================
  */
 
-const storedNoteListHeight = localStorage.getItem('noteListHeight') || 220;
+const storedNoteListHeightRaw = localStorage.getItem('noteListHeight');
+/** True when the user (or a prior session) has a persisted note-list height. */
+export const noteListHeightHasStore = storedNoteListHeightRaw !== null;
+const storedNoteListHeight = storedNoteListHeightRaw || 220;
 const storedSidebarWidth = localStorage.getItem('sidebarWidth') || 443;
 
 /** @param {string} key @param {boolean} fallback */
@@ -214,6 +217,10 @@ export const omniMode = writable('search');
 export const omniText = writable('');
 export const noteList = writable([]);
 export const noteListHeight = writable(Number(storedNoteListHeight));
+/** Persist preferred note-list height only (not temporary layout clamps). */
+export function persistNoteListHeight(height) {
+  localStorage.setItem('noteListHeight', String(height));
+}
 export const sidebarWidth = writable(Number(storedSidebarWidth));
 export const selectedNote = writable({});
 export const bodyText = writable('');
@@ -450,7 +457,6 @@ omniText.subscribe(v => {
   }
 });
 
-noteListHeight.subscribe(v => localStorage.setItem('noteListHeight', v.toString()));
 sidebarWidth.subscribe(v => localStorage.setItem('sidebarWidth', v.toString()));
 sidebarOpen.subscribe(v => localStorage.setItem('sidebarOpen', JSON.stringify(v)));
 

@@ -1,4 +1,5 @@
 <script>
+  import { get } from 'svelte/store';
   import { onMount } from 'svelte';
 
   import OmniBar from './lib/OmniBar.svelte';
@@ -17,6 +18,8 @@
     sidebarOpen,
     sidebarWidth,
     noteListHeight,
+    noteListHeightHasStore,
+    persistNoteListHeight,
     mediaPlayerHeight,
     notePopups,
     closeAllNotePopups,
@@ -34,8 +37,16 @@
   /** Minimum NoteDetail viewport so body content is never pushed past the fold. */
   const NOTE_DETAIL_MIN_PX = 120;
   const NOTE_LIST_MIN_PX = 60;
+  /** First-layout default: half of list+detail available space. */
+  const NOTE_LIST_DEFAULT_RATIO = 0.5;
 
   let mainContent = $state(null);
+  /** User/preferred height; null until first layout chooses a default. */
+  let preferredNoteListHeight = $state(
+    noteListHeightHasStore ? get(noteListHeight) : null
+  );
+  /** True after a stored preference exists or first-layout default was written. */
+  let noteListDefaultApplied = $state(noteListHeightHasStore);
 
   let isDemo = $derived(!$fullScreen);
   let isAppWindowed = $derived($fullScreen && $windowed && !$isMobile);
@@ -57,9 +68,44 @@
     return Math.max(NOTE_LIST_MIN_PX, mainContent.clientHeight - reserved);
   }
 
-  function clampNoteListHeight() {
+  /**
+   * Apply note-list height for the current layout.
+   * Preferred height is persisted; temporary clamp-downs are display-only.
+   */
+  function applyNoteListHeight() {
+    if (!mainContent || mainContent.clientHeight <= 0) return;
+
     const max = getNoteListMax();
-    noteListHeight.update((h) => (h > max ? max : h));
+    const available =
+      mainContent.clientHeight - listChromePx - $mediaPlayerHeight;
+
+    if (!noteListDefaultApplied) {
+      // First open: once layout has a real size, pick a default and persist it.
+      const preferred = Math.round(
+        Math.min(
+          max,
+          Math.max(NOTE_LIST_MIN_PX, available * NOTE_LIST_DEFAULT_RATIO)
+        )
+      );
+      preferredNoteListHeight = preferred;
+      noteListHeight.set(preferred);
+      persistNoteListHeight(preferred);
+      noteListDefaultApplied = true;
+      return;
+    }
+
+    // Preferred exists: clamp display only — do not overwrite preferred/localStorage.
+    const display = Math.max(
+      NOTE_LIST_MIN_PX,
+      Math.min(preferredNoteListHeight, max)
+    );
+    noteListHeight.set(display);
+  }
+
+  function onNoteListUserChange(height) {
+    preferredNoteListHeight = height;
+    persistNoteListHeight(height);
+    noteListDefaultApplied = true;
   }
 
   // Keep NoteDetail on-screen when the app window (or media chrome) shrinks.
@@ -70,8 +116,8 @@
     void listChromePx;
     if (!el) return;
 
-    clampNoteListHeight();
-    const ro = new ResizeObserver(() => clampNoteListHeight());
+    applyNoteListHeight();
+    const ro = new ResizeObserver(() => applyNoteListHeight());
     ro.observe(el);
     return () => ro.disconnect();
   });
@@ -167,6 +213,7 @@
           min={NOTE_LIST_MIN_PX}
           getMax={getNoteListMax}
           ariaLabel="Resize note list"
+          onUserChange={onNoteListUserChange}
         />
         <NoteDetail />
         {#if $showStatusBar}

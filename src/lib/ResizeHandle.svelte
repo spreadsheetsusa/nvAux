@@ -8,6 +8,8 @@
     max = 600,
     ariaLabel = 'Resize',
     getMax = null,
+    /** Called only for user-driven value changes (drag move / drag end). */
+    onUserChange = undefined,
   } = $props();
 
   let dragging = $state(false);
@@ -44,6 +46,7 @@
     const pos = orientation === 'vertical' ? event.clientY : event.clientX;
     const delta = pos - startPos;
     value = Math.round(clamp(startValue + delta, min, activeMax));
+    onUserChange?.(value);
   }
 
   function onPointerUp(event) {
@@ -51,6 +54,7 @@
     if (event.currentTarget?.hasPointerCapture?.(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
+    onUserChange?.(value);
     clearDrag();
   }
 
