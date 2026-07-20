@@ -4,8 +4,8 @@ Capture and retrieve ideas at the speed of thought with nvAux, the in-the-zone, 
 
 
 ```sh
-npm i && npm run dev
+bun i && bun dev
 ```
 
-Designed and built by [Abstractly](https://abstract.ly/). The Human Interface Company.
+Designed and built by [The American Spreadsheet Company](https://spreadsheetsusa.com/).
 
