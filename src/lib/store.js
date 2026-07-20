@@ -87,7 +87,25 @@ const storedGraphViewHeight = readStoredNumber('graphViewHeight', 260, 120, 900)
 const storedGraphViewOpen = readStoredBool('graphViewOpen', false);
 const storedGraphViewZoom = readStoredNumber('graphViewZoom', 1, 0.35, 8);
 
-const storedFullScreen = readStoredBool('fullScreen', false);
+/**
+ * Installed PWA (standalone / minimal-ui): open App Mode on first launch so the
+ * OS window is the app shell, not Demo. Honor an existing fullScreen preference.
+ */
+function isInstalledDisplayMode() {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return false;
+  }
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.matchMedia('(display-mode: minimal-ui)').matches
+  );
+}
+const storedFullScreen = (() => {
+  if (localStorage.getItem('fullScreen') !== null) {
+    return readStoredBool('fullScreen', false);
+  }
+  return isInstalledDisplayMode();
+})();
 /** Windowed app mode; migrated from inverted legacy `maximumFullScreen`. */
 const storedWindowed = (() => {
   const raw = localStorage.getItem('windowed');

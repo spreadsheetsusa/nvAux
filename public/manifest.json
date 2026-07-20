@@ -1,12 +1,24 @@
 {
+  "id": "/",
   "name": "nvAux",
   "short_name": "nvAux",
   "description": "Notes that hold anything. A calendar that holds a life.",
   "icons": [
-    { "src": "favicon.png", "type": "image/png", "sizes": "192x192", "purpose": "maskable" },
-    { "src": "favicon.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+    {
+      "src": "icons/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any"
+    }
   ],
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#181a1c",
   "theme_color": "#181a1c"
