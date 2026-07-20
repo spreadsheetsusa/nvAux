@@ -47,8 +47,8 @@
   /** Minimum NoteDetail viewport so body content is never pushed past the fold. */
   const NOTE_DETAIL_MIN_PX = 120;
   const NOTE_LIST_MIN_PX = 60;
-  /** First-layout default: half of list+detail available space. */
-  const NOTE_LIST_DEFAULT_RATIO = 0.5;
+  /** First-layout default: ~1/3 of list+detail available space. */
+  const NOTE_LIST_DEFAULT_RATIO = 1 / 3;
 
   let mainContent = $state(null);
   let dbOpenError = $state('');
