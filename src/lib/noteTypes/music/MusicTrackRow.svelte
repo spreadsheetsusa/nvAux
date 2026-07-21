@@ -4,8 +4,6 @@
   let {
     track,
     steps = 16,
-    currentStep = -1,
-    playing = false,
     loadState = 'loading',
     onToggleStep,
     onToggleMute,
@@ -89,15 +87,15 @@
   </div>
 
   <div class="music-steps flex gap-0.5 min-w-0 overflow-x-auto thin-scrollbar">
+    <!-- Playhead column inherits --music-ph from .music-tracks; no per-pad currentStep -->
+    <div class="music-row-playhead" aria-hidden="true"></div>
     {#each Array(steps) as _, i (i)}
       {@const on = !!track.pattern[i]}
-      {@const isPlayhead = playing && currentStep === i}
       {@const isBeat = i % 4 === 0}
       <button
         type="button"
         class="music-pad"
         class:music-pad-on={on}
-        class:music-pad-playhead={isPlayhead}
         class:music-pad-beat={isBeat}
         onclick={() => onToggleStep?.(i)}
         aria-label="{track.name} step {i + 1}"
@@ -200,8 +198,31 @@
     accent-color: #6a6a70;
   }
 
+  .music-steps {
+    position: relative;
+    --pad-w: 18px;
+    --pad-gap: 2px;
+  }
+
+  .music-row-playhead {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: var(--pad-w);
+    pointer-events: none;
+    z-index: 1;
+    border-radius: 2px;
+    box-shadow: inset 0 0 0 1px
+      color-mix(in srgb, var(--app-accent, #ed0178) 80%, #fff);
+    background: color-mix(in srgb, var(--app-accent, #ed0178) 14%, transparent);
+    transform: translateX(calc(var(--music-ph, -1) * (var(--pad-w) + var(--pad-gap))));
+    opacity: var(--music-ph-on, 0);
+    will-change: transform;
+  }
+
   .music-pad {
-    width: 18px;
+    width: var(--pad-w);
     height: 22px;
     flex-shrink: 0;
     padding: 0;
@@ -228,19 +249,6 @@
       0 0 5px color-mix(in srgb, var(--app-accent, #ed0178) 45%, transparent);
   }
 
-  .music-pad-playhead {
-    outline: 1px solid color-mix(in srgb, var(--app-accent, #ed0178) 80%, #fff);
-    outline-offset: -1px;
-  }
-
-  .music-pad-on.music-pad-playhead {
-    background: linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--app-accent, #ed0178) 90%, #fff) 0%,
-      color-mix(in srgb, var(--app-accent, #ed0178) 70%, #fff) 100%
-    );
-  }
-
   @media (max-width: 640px) {
     .music-sample-btn {
       width: 84px;
@@ -250,8 +258,11 @@
       width: 40px;
     }
 
+    .music-steps {
+      --pad-w: 16px;
+    }
+
     .music-pad {
-      width: 16px;
       height: 20px;
     }
   }

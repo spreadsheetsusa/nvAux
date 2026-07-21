@@ -49,11 +49,56 @@
     loadStates = { ...loadStates, [trackId]: state };
   });
 
+  /** @type {ReturnType<typeof setTimeout> | null} */
+  let persistTimer = null;
+  /** @type {{ theme: any, project: any } | null} */
+  let persistPending = null;
+
+  function flushPersist() {
+    if (persistTimer != null) {
+      clearTimeout(persistTimer);
+      persistTimer = null;
+    }
+    const pending = persistPending;
+    persistPending = null;
+    if (!pending) return;
+    const serialized = serializeMusicNote(pending.theme, pending.project);
+    lastBody = serialized;
+    onChange?.(serialized);
+  }
+
+  /** Debounced serialize → parent bodyText so clicks stay snappy. */
+  function schedulePersist(nextTheme, nextProject) {
+    persistPending = { theme: nextTheme, project: nextProject };
+    if (persistTimer != null) clearTimeout(persistTimer);
+    persistTimer = setTimeout(() => {
+      persistTimer = null;
+      flushPersist();
+    }, 300);
+  }
+
+  /** Immediate serialize (sample / steps / unmount). */
+  function emitImmediate(nextTheme, nextProject) {
+    if (persistTimer != null) {
+      clearTimeout(persistTimer);
+      persistTimer = null;
+    }
+    persistPending = null;
+    const serialized = serializeMusicNote(nextTheme, nextProject);
+    lastBody = serialized;
+    project = nextProject;
+    theme = nextTheme;
+    parseError = null;
+    onChange?.(serialized);
+  }
+
   onDestroy(() => {
+    flushPersist();
     engine.dispose();
   });
 
   // Sync from note body when external edits land (Edit mode / other windows).
+  // Also runs the one-time heavy engine sync for the loaded project.
   $effect(() => {
     const nextBody = body ?? '';
     if (nextBody === lastBody && project) return;
@@ -62,15 +107,12 @@
     project = result.project;
     theme = result.theme;
     parseError = result.parseError;
-  });
 
-  // Keep engine in sync with project (samples, bpm, patterns, fx).
-  $effect(() => {
-    if (!project) return;
-    const snapshot = project;
+    if (!result.project || result.parseError) return;
+
     let cancelled = false;
     (async () => {
-      await engine.syncProject(snapshot);
+      await engine.syncProject(result.project);
       if (cancelled) return;
       const states = {};
       for (const [id, state] of engine.getLoadStates()) {
@@ -99,20 +141,30 @@
     Object.values(loadStates).some((s) => s === 'error')
   );
 
-  function emit(nextTheme, nextProject) {
-    const serialized = serializeMusicNote(nextTheme, nextProject);
-    lastBody = serialized;
-    project = nextProject;
-    theme = nextTheme;
-    parseError = null;
-    onChange?.(serialized);
-  }
+  /** CSS playhead vars — update without invalidating pad buttons. */
+  let playheadStep = $derived(playing && currentStep >= 0 ? currentStep : -1);
+  let playheadOn = $derived(playheadStep >= 0 ? 1 : 0);
 
-  function updateProject(mutator) {
+  /**
+   * Optimistic UI + cheap audio ref update + debounced persist.
+   * @param {(p: any) => any} mutator
+   * @param {'ref' | 'bpm' | 'none'} [audio]
+   */
+  function updateProject(mutator, audio = 'ref') {
     if (!project) return;
     const next = mutator(project);
     if (!next || next === project) return;
-    emit(theme, next);
+    project = next;
+    parseError = null;
+
+    if (audio === 'ref') {
+      engine.setProject(next);
+    } else if (audio === 'bpm') {
+      engine.setBpm(next.bpm);
+      engine.setProject(next);
+    }
+
+    schedulePersist(theme, next);
   }
 
   async function handlePlay() {
@@ -129,12 +181,21 @@
 
   function handleBpm(nextBpm) {
     const bpm = Math.min(MAX_BPM, Math.max(MIN_BPM, nextBpm));
-    engine.setBpm(bpm);
-    updateProject((p) => ({ ...p, bpm }));
+    updateProject((p) => ({ ...p, bpm }), 'bpm');
   }
 
-  function handleSteps(nextSteps) {
-    updateProject((p) => setSteps(p, nextSteps));
+  async function handleSteps(nextSteps) {
+    if (!project) return;
+    const next = setSteps(project, nextSteps);
+    if (!next || next === project) return;
+    project = next;
+    await engine.syncProject(next);
+    const states = {};
+    for (const [id, state] of engine.getLoadStates()) {
+      states[id] = state;
+    }
+    loadStates = states;
+    emitImmediate(theme, next);
   }
 
   function handleToggleStep(trackId, stepIndex) {
@@ -159,7 +220,8 @@
 
   function handleVolume(trackId, volume) {
     if (!project) return;
-    emit(theme, updateTrack(project, trackId, { volume }));
+    engine.setTrackVolume(trackId, volume);
+    updateProject((p) => updateTrack(p, trackId, { volume }));
   }
 
   function handleSelectPattern(index) {
@@ -167,11 +229,12 @@
   }
 
   function handleEffects(patch) {
-    updateProject((p) => {
-      const next = updateEffects(p, patch);
-      engine.syncEffects(next.effects);
-      return next;
-    });
+    if (!project) return;
+    const next = updateEffects(project, patch);
+    engine.syncEffects(next.effects);
+    project = next;
+    engine.setProject(next);
+    schedulePersist(theme, next);
   }
 
   function openPicker(trackId, anchorEl) {
@@ -185,11 +248,17 @@
     pickerTrackId = null;
   }
 
-  function selectSample(sample) {
-    if (!pickerTrackId) return;
-    updateProject((p) =>
-      updateTrack(p, pickerTrackId, { sampleUrl: sample.url })
-    );
+  async function selectSample(sample) {
+    if (!pickerTrackId || !project) return;
+    const next = updateTrack(project, pickerTrackId, { sampleUrl: sample.url });
+    project = next;
+    await engine.syncProject(next);
+    const states = {};
+    for (const [id, state] of engine.getLoadStates()) {
+      states[id] = state;
+    }
+    loadStates = states;
+    emitImmediate(theme, next);
     closePicker();
   }
 
@@ -233,13 +302,15 @@
           activePattern={project.activePattern}
           onSelect={handleSelectPattern}
         />
-        <div class="music-tracks thin-scrollbar flex-1 min-h-0 overflow-y-auto overflow-x-auto">
+        <div
+          class="music-tracks thin-scrollbar flex-1 min-h-0 overflow-y-auto overflow-x-auto"
+          style:--music-ph={playheadStep}
+          style:--music-ph-on={playheadOn}
+        >
           {#each project.tracks as track (track.id)}
             <MusicTrackRow
               {track}
               steps={project.steps}
-              {currentStep}
-              {playing}
               loadState={loadStates[track.id] ?? 'loading'}
               onToggleStep={(i) => handleToggleStep(track.id, i)}
               onToggleMute={() => handleToggleMute(track.id)}

@@ -9,6 +9,9 @@ import * as Tone from 'tone';
 /**
  * Tone.js step-sequencer engine for Music notes.
  * One instance per MusicDaw mount; dispose on unmount.
+ *
+ * Cheap path: setProject / setBpm / setTrackVolume / syncEffects — live ref only.
+ * Heavy path: syncProject — sample loads, track add/remove, step-count rebuild.
  */
 export function createMusicEngine() {
   /** @type {Map<string, Tone.Player>} */
@@ -87,8 +90,22 @@ export function createMusicEngine() {
    * @param {'loading' | 'ready' | 'error'} state
    */
   function setLoadState(trackId, state) {
+    const prev = loadState.get(trackId);
+    if (prev === state) return;
     loadState.set(trackId, state);
     onLoadState?.(trackId, state);
+  }
+
+  /**
+   * Cheap volume update — no load-state churn when sample URL is unchanged.
+   * @param {string} trackId
+   * @param {number} volume
+   */
+  function setTrackVolume(trackId, volume) {
+    if (disposed) return;
+    const player = players.get(trackId);
+    if (!player) return;
+    player.volume.value = Tone.gainToDb(Math.max(0.0001, volume));
   }
 
   /**
@@ -105,7 +122,10 @@ export function createMusicEngine() {
       );
       if (url === track.sampleUrl) {
         existing.volume.value = Tone.gainToDb(Math.max(0.0001, track.volume));
-        if (existing.loaded) setLoadState(track.id, 'ready');
+        // Silent: do not re-fire onLoadState when already ready
+        if (existing.loaded && loadState.get(track.id) !== 'ready') {
+          setLoadState(track.id, 'ready');
+        }
         return;
       }
       existing.dispose();
@@ -154,7 +174,13 @@ export function createMusicEngine() {
       (time, step) => {
         const p = project;
         if (!p) return;
-        onStep?.(step);
+
+        // Schedule UI playhead on the draw loop — never punch Svelte from audio time
+        if (onStep) {
+          Tone.Draw.schedule(() => {
+            if (!disposed) onStep?.(step);
+          }, time);
+        }
 
         const anySolo = p.tracks.some((t) => t.solo);
         for (const track of p.tracks) {
@@ -182,6 +208,17 @@ export function createMusicEngine() {
   }
 
   /**
+   * Cheap: update the live project ref the sequence already reads.
+   * Use for pattern / mute / solo / pattern-bank edits.
+   * @param {MusicProject} next
+   */
+  function setProject(next) {
+    if (disposed) return;
+    project = next;
+  }
+
+  /**
+   * Heavy: samples, FX, BPM, sequence rebuild when step count changes.
    * @param {MusicProject} next
    */
   async function syncProject(next) {
@@ -191,14 +228,16 @@ export function createMusicEngine() {
     Tone.getTransport().swing = next.swing;
     Tone.getTransport().swingSubdivision = '16n';
 
-    syncEffects(next.effects ?? {
-      filterFreq: 12000,
-      filterQ: 1,
-      distortion: 0,
-      delay: 0,
-      delayTime: 0.25,
-      reverb: 0,
-    });
+    syncEffects(
+      next.effects ?? {
+        filterFreq: 12000,
+        filterQ: 1,
+        distortion: 0,
+        delay: 0,
+        delayTime: 0.25,
+        reverb: 0,
+      }
+    );
 
     const ids = new Set(next.tracks.map((t) => t.id));
     for (const [id, player] of players) {
@@ -233,7 +272,11 @@ export function createMusicEngine() {
     transport.stop();
     transport.position = 0;
     sequence?.stop(0);
-    onStep?.(-1);
+    if (onStep) {
+      Tone.Draw.schedule(() => {
+        if (!disposed) onStep?.(-1);
+      }, Tone.now());
+    }
   }
 
   function pause() {
@@ -318,8 +361,10 @@ export function createMusicEngine() {
   }
 
   return {
+    setProject,
     syncProject,
     syncEffects,
+    setTrackVolume,
     play,
     stop,
     pause,
