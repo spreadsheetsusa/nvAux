@@ -75,6 +75,7 @@ html, body { margin: 0; padding: 0; font-family: Verdana, Geneva, Tahoma, sans-s
 .w-full { width: 100%; }
 .w-screen {  width: 100%; max-width: 100%; }
 .z-20 { z-index: 20; }
+.z-30 { z-index: 30; }
 .transition-all { transition-property: all; transition-duration: 300ms; transition-timing-function: ease; }
 
 .btn { padding: 12px 20px; border-radius: 3px; font-size: 14px; }

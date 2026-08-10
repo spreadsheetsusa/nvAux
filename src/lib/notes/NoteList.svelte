@@ -16,6 +16,7 @@
     noteMatchesQuery,
   } from '$lib/store';
   import { isNoteLocked } from '$lib/noteTypes/parseNoteMeta';
+  import { isOmniSlashInput } from '$lib/omni/slashCommands';
   import FileListItemContextMenu from './FileListItemContextMenu.svelte';
 
   const BODY_PREVIEW_LEN = 100;
@@ -63,8 +64,10 @@
     // Encrypted name/body cannot be used in IndexedDB selectors — filter in memory.
     const query = database.notes.find({ sort: [{ updatedAt: 'desc' }] });
     const subscription = query.$.subscribe((results) => {
-      notes = (q || '').trim()
-        ? results.filter((n) => noteMatchesQuery(n, q))
+      // Slash-command mode is not a note search — keep the full list visible.
+      const filterQuery = isOmniSlashInput(q) ? '' : q;
+      notes = (filterQuery || '').trim()
+        ? results.filter((n) => noteMatchesQuery(n, filterQuery))
         : results;
     });
 

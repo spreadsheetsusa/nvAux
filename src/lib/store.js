@@ -983,12 +983,12 @@ export function noteMatchesQuery(note, query) {
 }
 
 /**
- * Open a note by exact title (name), creating it if missing.
+ * Open a note by exact title, or create it with an optional body.
  * Does not alter omniText / filter mode.
- * @param {string} name
+ * @param {{ name: string, body?: string }} opts
  * @returns {Promise<object | null>}
  */
-export async function openNoteByName(name) {
+export async function createOrOpenNote({ name, body = '' }) {
   const trimmed = (name || '').trim();
   if (!trimmed) return null;
   const existing = await findNoteByNameExact(trimmed);
@@ -996,16 +996,28 @@ export async function openNoteByName(name) {
     return selectNoteByGuid(existing.guid);
   }
   const database = await db();
+  const nextBody = typeof body === 'string' ? body : '';
   const note = await database.notes.insert({
     guid: uuidv4(),
     name: trimmed,
+    body: nextBody,
     createdAt: new Date().getTime(),
     updatedAt: new Date().getTime(),
   });
   invalidateWikiNoteNames();
   selectedNote.set(note);
-  bodyText.set('');
+  bodyText.set(nextBody);
   return note;
+}
+
+/**
+ * Open a note by exact title (name), creating it if missing.
+ * Does not alter omniText / filter mode.
+ * @param {string} name
+ * @returns {Promise<object | null>}
+ */
+export async function openNoteByName(name) {
+  return createOrOpenNote({ name, body: '' });
 }
 
 omniText.subscribe((v) => {

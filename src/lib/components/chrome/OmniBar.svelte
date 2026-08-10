@@ -1,30 +1,48 @@
 <script>
   import { onMount } from 'svelte';
   import { format } from 'date-fns';
-  import { v4 as uuidv4 } from 'uuid';
 
   import Icon from '$lib/components/Icon.svelte';
+  import OmniSlashSuggest from '$lib/omni/OmniSlashSuggest.svelte';
+  import {
+    autocompleteOmniSlashCommand,
+    isOmniSlashInput,
+    listOmniSlashCommands,
+    parseOmniSlashCommand,
+  } from '$lib/omni/slashCommands';
+  import { defaultBodyForType } from '$lib/noteTypes/defaultNoteBody';
 
   import {
     omniMode,
     omniText,
     selectedNote,
-    db,
     bodyText,
     sidebarOpen,
     fullScreen,
     windowed,
     showClock,
-    invalidateWikiNoteNames,
     isMobile,
     selectNoteByGuid,
-    findNoteByNameExact,
+    createOrOpenNote,
     SETTINGS_GUID,
   } from '$lib/store';
 
   let omniInput = $state();
   let time = $state(new Date());
   let isAppFullscreen = $derived($fullScreen && (!$windowed || $isMobile));
+
+  /** Filter query for slash suggest; not updated by arrow/tab autocomplete. */
+  let slashFilterQuery = $state('');
+  let slashSelectedIndex = $state(0);
+  let slashMenuOpen = $derived(isOmniSlashInput($omniText));
+  let slashCandidates = $derived(
+    slashMenuOpen ? listOmniSlashCommands(slashFilterQuery || $omniText) : []
+  );
+  let safeSlashIndex = $derived.by(() => {
+    const len = slashCandidates.length;
+    if (len === 0) return 0;
+    return Math.min(slashSelectedIndex, len - 1);
+  });
 
   /** Omnibar: Demo ↔ App Fullscreen. Windowed is Settings-only. */
   function toggleAppFullscreen() {
@@ -39,6 +57,29 @@
   /** Open Settings note without changing Omnibar filter/search. */
   function openSettings() {
     selectNoteByGuid(SETTINGS_GUID);
+  }
+
+  /** @param {{ type: string, aliases: string[], label: string, description: string }} cmd */
+  function applySlashAutocomplete(cmd) {
+    const next = autocompleteOmniSlashCommand(cmd, $omniText);
+    omniText.set(next);
+    queueMicrotask(() => {
+      if (!(omniInput instanceof HTMLInputElement)) return;
+      omniInput.focus();
+      const caret = next.length;
+      omniInput.setSelectionRange(caret, caret);
+    });
+  }
+
+  /** @param {Event} e */
+  function handleOmniInput(e) {
+    const value = e.currentTarget instanceof HTMLInputElement ? e.currentTarget.value : '';
+    if (isOmniSlashInput(value)) {
+      slashFilterQuery = value;
+    } else {
+      slashFilterQuery = '';
+      slashSelectedIndex = 0;
+    }
   }
 
   onMount(() => {
@@ -57,27 +98,10 @@
     if (e.key === 'Escape') {
       omniText.set('');
       bodyText.set('');
+      slashFilterQuery = '';
+      slashSelectedIndex = 0;
       omniInput.focus();
     }
-  };
-
-  const handleTitleEnter = (e) => {
-    if ($omniText === '') return;
-    if (e.key === 'Enter') addNote();
-  };
-
-  /** @param {KeyboardEvent} e */
-  const handleOmniKeydown = (e) => {
-    if (e.key === 'ArrowDown') {
-      const first = document.querySelector('#noteList li[data-guid]');
-      const guid = first?.getAttribute('data-guid');
-      if (!guid) return;
-      e.preventDefault();
-      selectNoteByGuid(guid);
-      document.getElementById('noteList')?.focus();
-      return;
-    }
-    handleTitleEnter(e);
   };
 
   /** @param {FocusEvent} e */
@@ -91,29 +115,94 @@
     input.select();
   };
 
-  const addNote = async () => {
-    const db$ = await db();
-    const note = await findNoteByNameExact($omniText);
+  const runSlashCreate = async () => {
+    const parsed = parseOmniSlashCommand($omniText);
+    if (!parsed || parsed.kind !== 'command') return false;
+
     omniMode.set('edit');
+    const body = defaultBodyForType(parsed.type);
+    const note = await createOrOpenNote({ name: parsed.title, body });
+    if (!note) return true;
+
+    omniText.set(note.name);
+    slashFilterQuery = '';
+    slashSelectedIndex = 0;
+    setTimeout(() => {
+      document.getElementById('body-editor')?.focus();
+    }, 50);
+    return true;
+  };
+
+  const addNote = async () => {
+    if ($omniText === '') return;
+    omniMode.set('edit');
+    const note = await createOrOpenNote({ name: $omniText, body: '' });
     if (note) {
-      selectedNote.set(note);
       omniText.set(note.name);
-      bodyText.set(note.body);
-    } else {
-      const created = await db$.notes.insert({
-        guid: uuidv4(),
-        name: $omniText,
-        createdAt: new Date().getTime(),
-        updatedAt: new Date().getTime(),
-      });
-      invalidateWikiNoteNames();
-      selectedNote.set(created);
-      omniMode.set('edit');
-      bodyText.set('');
     }
     setTimeout(() => {
       document.getElementById('body-editor')?.focus();
     }, 50);
+  };
+
+  /** @param {KeyboardEvent} e */
+  const handleOmniKeydown = (e) => {
+    if (slashMenuOpen && slashCandidates.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const next = (safeSlashIndex + 1) % slashCandidates.length;
+        slashSelectedIndex = next;
+        applySlashAutocomplete(slashCandidates[next]);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const next =
+          (safeSlashIndex - 1 + slashCandidates.length) % slashCandidates.length;
+        slashSelectedIndex = next;
+        applySlashAutocomplete(slashCandidates[next]);
+        return;
+      }
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        applySlashAutocomplete(slashCandidates[safeSlashIndex] ?? slashCandidates[0]);
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const parsed = parseOmniSlashCommand($omniText);
+        if (parsed?.kind === 'command') {
+          void runSlashCreate();
+          return;
+        }
+        // Partial match: autocomplete selected, wait for another Enter to create.
+        applySlashAutocomplete(slashCandidates[safeSlashIndex] ?? slashCandidates[0]);
+        return;
+      }
+    }
+
+    if (slashMenuOpen && e.key === 'Enter') {
+      e.preventDefault();
+      // Unknown slash with no candidates — no-op (do not create a "/foo" note).
+      void runSlashCreate();
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      const first = document.querySelector('#noteList li[data-guid]');
+      const guid = first?.getAttribute('data-guid');
+      if (!guid) return;
+      e.preventDefault();
+      selectNoteByGuid(guid);
+      document.getElementById('noteList')?.focus();
+      return;
+    }
+
+    if (e.key === 'Enter') {
+      if ($omniText === '') return;
+      e.preventDefault();
+      void addNote();
+    }
   };
 </script>
 
@@ -132,16 +221,22 @@
   >
     <Icon name="Sidebar" />
   </button>
-  <div class="input-wrapper flex-grow flex items-center">
+  <div class="input-wrapper relative flex-grow flex items-center">
     <input
       id="omni-input"
       bind:this={omniInput}
       bind:value={$omniText}
       onkeydown={handleOmniKeydown}
+      oninput={handleOmniInput}
       onfocus={handleOmniFocus}
       type="text"
       class="flex-grow py-0.5 px-1 flex-grow"
-      placeholder="Search or Create"
+      placeholder="Search, Create, or /kanban"
+      autocomplete="off"
+      role="combobox"
+      aria-autocomplete="list"
+      aria-expanded={slashMenuOpen && slashCandidates.length > 0}
+      aria-controls="omni-slash-suggest"
     />
     {#if $omniText !== ''}
       <button
@@ -151,12 +246,27 @@
         onclick={() => {
           $omniText = '';
           $selectedNote = '';
+          slashFilterQuery = '';
+          slashSelectedIndex = 0;
           document.getElementById('omni-input').focus();
         }}
       >
         <Icon name="Xcircle" />
       </button>
     {/if}
+    <OmniSlashSuggest
+      candidates={slashCandidates}
+      selectedIndex={safeSlashIndex}
+      visible={slashMenuOpen}
+      onSelect={(cmd) => {
+        const idx = slashCandidates.findIndex((c) => c.type === cmd.type);
+        if (idx >= 0) slashSelectedIndex = idx;
+        applySlashAutocomplete(cmd);
+      }}
+      onHover={(i) => {
+        slashSelectedIndex = i;
+      }}
+    />
   </div>
   <div class="tray flex items-center flex-shrink-0" style="padding-right: 10px;">
     {#if $showClock}
