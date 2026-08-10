@@ -46,6 +46,7 @@
 
   let playing = $state(false);
   let playheadMs = $state(0);
+  let playRate = $state(10);
   let selectedId = $state(null);
   /** @type {{ id: string, title: string } | null} */
   let toast = $state(null);
@@ -204,7 +205,7 @@
 
     const tick = (now) => {
       if (!playing || !project) return;
-      const elapsed = now - playStartedAt;
+      const elapsed = (now - playStartedAt) * playRate;
       let next = playOriginMs + elapsed;
       if (next >= project.durationMs) {
         playheadMs = project.durationMs;
@@ -595,8 +596,16 @@
       playing={playing}
       playheadLabel={playheadLabel}
       canPlay={mode === 'relative'}
+      playRate={playRate}
       onPlay={onPlay}
       onStop={onStop}
+      onPlayRate={(rate) => {
+        if (playing) {
+          playOriginMs = playheadMs;
+          playStartedAt = performance.now();
+        }
+        playRate = rate;
+      }}
       onZoomIn={() => applyZoom(1.2)}
       onZoomOut={() => applyZoom(1 / 1.2)}
       onFit={fitContents}

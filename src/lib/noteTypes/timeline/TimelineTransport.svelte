@@ -5,8 +5,10 @@
     playing = false,
     playheadLabel = '0:00',
     canPlay = false,
+    playRate = 1,
     onPlay,
     onStop,
+    onPlayRate,
     onZoomIn,
     onZoomOut,
     onFit,
@@ -15,6 +17,8 @@
     onModeChange,
     onGoToday,
   } = $props();
+
+  const RATES = [1, 10, 60];
 </script>
 
 <div class="tl-transport flex items-center gap-1.5 px-2 py-1.5 shrink-0 flex-wrap">
@@ -50,6 +54,19 @@
       </button>
     {/if}
     <span class="tl-playhead-label tabular-nums text-xs opacity-70">{playheadLabel}</span>
+    <div class="tl-mode flex items-center gap-0.5" role="group" aria-label="Playback rate">
+      {#each RATES as rate (rate)}
+        <button
+          type="button"
+          class="tl-chip"
+          class:active={playRate === rate}
+          title="{rate}× playback"
+          onclick={() => onPlayRate?.(rate)}
+        >
+          {rate}×
+        </button>
+      {/each}
+    </div>
   {:else if mode === 'calendar'}
     <button type="button" class="tl-btn" onclick={() => onGoToday?.()} title="Scroll to today">
       Today
