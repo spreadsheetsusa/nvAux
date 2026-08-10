@@ -11,6 +11,7 @@ import {
 } from './dbEncryption';
 import { defaultKanbanBody } from './noteTypes/kanban/kanbanModel';
 import { defaultMusicBody } from './noteTypes/music/musicModel';
+import { defaultTimelineBody } from './noteTypes/timeline/timelineModel';
 
 /**
  * RxDB ************************************************************************
@@ -32,6 +33,7 @@ const TECHNO_LEAGUE_GUID = '22222222-2222-2222-2222-222222222222';
 const KANBAN_DEMO_GUID = '33333333-3333-3333-3333-333333333333';
 const VIDEO_DEMO_GUID = '44444444-4444-4444-4444-444444444444';
 const MUSIC_DEMO_GUID = '55555555-5555-5555-5555-555555555555';
+const TIMELINE_DEMO_GUID = '66666666-6666-6666-6666-666666666666';
 
 let dbPromise;
 
@@ -180,7 +182,7 @@ This is a web-based note-taking app inspired by nvALT where searching and creati
 
 * All your notes are stored within your browser, locally. Note titles and bodies are encrypted at rest in IndexedDB (the decryption key stays on this device so the app opens without a password).
 * 'Add to Home Screen' on iOS Safari for a native app-like experience.
-* Notes can be typed: open **📋 Sample Kanban** for a board, or **🥁 Sample Drum Machine** for a step sequencer (Preview = UI, Edit = source). SoundCloud, YouTube, and image/video links queue into the media player — try **🎧 The Gentleman's Techno League - EP1** and **🎥 Video Link Example**.
+* Notes can be typed: open **📋 Sample Kanban** for a board, **🥁 Sample Drum Machine** for a step sequencer, or **📅 Sample Timeline** for a multi-lane plan (Preview = UI, Edit = source). SoundCloud, YouTube, and image/video links queue into the media player — try **🎧 The Gentleman's Techno League - EP1** and **🎥 Video Link Example**.
 
 If you are interested in the development of nvAux the project is open-source and available on GitHub at https://github.com/matterofabstract/nvaux
 
@@ -258,6 +260,17 @@ https://www.youtube.com/watch?v=Hm3JodBR-vs
       guid: MUSIC_DEMO_GUID,
       name: '🥁 Sample Drum Machine',
       body: defaultMusicBody(),
+      createdAt: new Date().getTime(),
+      updatedAt: new Date().getTime(),
+    });
+  }
+
+  const timelineDemoNote = await database.notes.findOne(TIMELINE_DEMO_GUID).exec();
+  if (!timelineDemoNote) {
+    await database.notes.insert({
+      guid: TIMELINE_DEMO_GUID,
+      name: '📅 Sample Timeline',
+      body: defaultTimelineBody(),
       createdAt: new Date().getTime(),
       updatedAt: new Date().getTime(),
     });

@@ -36,6 +36,7 @@
   import { resolveNoteType } from '$lib/noteTypes/resolveNoteType';
   import KanbanBoard from '$lib/noteTypes/kanban/KanbanBoard.svelte';
   import MusicDaw from '$lib/noteTypes/music/MusicDaw.svelte';
+  import TimelineView from '$lib/noteTypes/timeline/TimelineView.svelte';
 
   const handleDebounceSave = debounce(() => updateNote(), 300);
 
@@ -69,6 +70,7 @@
   let showMarkdownPreview = $derived(showPreview && noteType === 'markdown');
   let showKanban = $derived(showPreview && noteType === 'kanban');
   let showMusic = $derived(showPreview && noteType === 'music');
+  let showTimeline = $derived(showPreview && noteType === 'timeline');
 
   $effect(() => {
     syncMarkdownPreviewForNoteType(noteType);
@@ -264,6 +266,8 @@
       <KanbanBoard body={$bodyText} onChange={handleBodyChange} />
     {:else if showMusic}
       <MusicDaw body={$bodyText} onChange={handleBodyChange} />
+    {:else if showTimeline}
+      <TimelineView body={$bodyText} onChange={handleBodyChange} />
     {:else if showMarkdownPreview}
       <!-- Event delegation for [[wiki]] anchors inside {@html} preview -->
       <!-- svelte-ignore a11y_click_events_have_key_events -->

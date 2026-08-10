@@ -29,6 +29,7 @@
   import { resolveNoteType } from '$lib/noteTypes/resolveNoteType';
   import KanbanBoard from '$lib/noteTypes/kanban/KanbanBoard.svelte';
   import MusicDaw from '$lib/noteTypes/music/MusicDaw.svelte';
+  import TimelineView from '$lib/noteTypes/timeline/TimelineView.svelte';
 
 
   let {
@@ -74,6 +75,7 @@
   let showMarkdownPreview = $derived(showPreview && noteType === 'markdown');
   let showKanban = $derived(showPreview && noteType === 'kanban');
   let showMusic = $derived(showPreview && noteType === 'music');
+  let showTimeline = $derived(showPreview && noteType === 'timeline');
 
   $effect(() => {
     if (isSettings || missing) return;
@@ -214,6 +216,8 @@
         <KanbanBoard body={localBody} onChange={handleBodyChange} />
       {:else if showMusic}
         <MusicDaw body={localBody} onChange={handleBodyChange} />
+      {:else if showTimeline}
+        <TimelineView body={localBody} onChange={handleBodyChange} />
       {:else if showMarkdownPreview}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <!-- svelte-ignore a11y_no_static_element_interactions -->

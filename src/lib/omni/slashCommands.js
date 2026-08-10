@@ -1,7 +1,7 @@
 import { format } from 'date-fns';
 
 /**
- * @typedef {{ type: 'kanban' | 'music', aliases: string[], label: string, description: string }} OmniSlashCommand
+ * @typedef {{ type: 'kanban' | 'music' | 'timeline', aliases: string[], label: string, description: string }} OmniSlashCommand
  */
 
 /** @type {OmniSlashCommand[]} */
@@ -17,6 +17,12 @@ export const OMNI_SLASH_COMMANDS = [
     aliases: ['music', 'drum', 'dm'],
     label: 'Music',
     description: 'Create a drum / music note',
+  },
+  {
+    type: 'timeline',
+    aliases: ['timeline', 'gantt', 'tl'],
+    label: 'Timeline',
+    description: 'Create a multi-lane timeline',
   },
 ];
 
@@ -83,7 +89,7 @@ export function autocompleteOmniSlashCommand(command, currentText) {
 
 /**
  * @param {string | null | undefined} text
- * @returns {null | { kind: 'unknown' } | { kind: 'command', type: 'kanban' | 'music', title: string, alias: string, command: OmniSlashCommand }}
+ * @returns {null | { kind: 'unknown' } | { kind: 'command', type: 'kanban' | 'music' | 'timeline', title: string, alias: string, command: OmniSlashCommand }}
  */
 export function parseOmniSlashCommand(text) {
   if (!isOmniSlashInput(text)) return null;
